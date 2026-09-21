@@ -1,7 +1,9 @@
 from pathlib import Path
+import io
 import subprocess
 import sys
 import unittest
+from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[1]
 class AcceptanceTests(unittest.TestCase):
     def test_runnable_entrypoint_and_documented_commands(self):
@@ -11,6 +13,19 @@ class AcceptanceTests(unittest.TestCase):
         self.assertEqual(p.returncode, 0, p.stderr)
         for command in ('bootstrap', 'doctor', 'scan', 'demo', 'ai', 'compare'):
             self.assertIn(command, p.stdout)
+        self.assertIn('CommitScope', p.stdout)
+        self.assertIn('Evidence-driven security review for Git repositories', p.stdout)
+        self.assertNotIn('Security Review Project:', p.stdout)
+    def test_report_driver_uses_public_brand(self):
+        from sec_review.reports import sarif
+        r={'findings':[]}
+        self.assertEqual(sarif(r)['runs'][0]['tool']['driver']['name'],'CommitScope')
+    def test_unsupported_native_platform_exits_incomplete(self):
+        from sec_review.cli import main
+        stderr=io.StringIO()
+        with patch('sec_review.tools.platform.system',return_value='Windows'), patch('sec_review.tools.platform.machine',return_value='AMD64'), patch('sys.stderr',stderr):
+            self.assertEqual(main(['preflight']),2)
+        self.assertIn('Unsupported platform windows-x86_64', stderr.getvalue())
     def test_scanner_bootstrap_script_exists(self):
         self.assertTrue((ROOT / 'scripts/bootstrap.sh').is_file())
     def test_real_examples_and_active_ci_exist(self):

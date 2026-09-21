@@ -56,6 +56,16 @@ def no_symlinks(path: Path) -> None:
     for part in (path, *path.parents):
         if part.is_symlink(): raise ReviewError(f'Refusing symbolic-link path: {part}')
 
+def trusted_internal_temp_path(path: Path) -> Path:
+    """Canonicalize only operator/test-created paths that remain inside tempfile's root."""
+    try:
+        root = Path(tempfile.gettempdir()).resolve(strict=True)
+        resolved = Path(path).resolve(strict=False)
+        resolved.relative_to(root)
+    except (OSError, ValueError) as e:
+        raise ReviewError(f'Internal temporary path escaped the trusted temp root: {path}') from e
+    return resolved
+
 def private_dir(path: Path, *, new: bool=False) -> Path:
     no_symlinks(path)
     path.mkdir(parents=True, exist_ok=not new, mode=0o700)

@@ -12,9 +12,11 @@ import tempfile
 import urllib.error
 import urllib.request
 import venv
-from .core import ROOT, ReviewError, child_env, execute, file_hash, now, private_dir, read_json, write_json, write_text, no_symlinks
+from . import __version__
+from .core import ROOT, ReviewError, child_env, execute, file_hash, now, private_dir, read_json, write_json, write_text, no_symlinks, safe_path
 
 TOOLS=ROOT/'.tools'
+MAX_BINARY_BYTES=200*1024*1024
 
 def lock() -> dict:
     return read_json(ROOT/'config/tools.lock.json')
@@ -30,6 +32,21 @@ def platform_key(system: str | None=None, machine: str | None=None) -> str:
 def tool_paths(root: Path=TOOLS) -> dict[str,Path]:
     return {'semgrep':root/'semgrep-env/bin/semgrep','gitleaks':root/'bin/gitleaks','trivy':root/'bin/trivy'}
 
+def semgrep_site_file(root: Path, relative: str) -> Path | None:
+    for candidate in sorted((root/'semgrep-env/lib').glob('python*/site-packages/'+relative)):
+        if candidate.is_file():
+            no_symlinks(candidate)
+            return candidate
+    return None
+
+def semgrep_child_env(root: Path, home: Path) -> dict[str,str]:
+    env=child_env(home)
+    cert=semgrep_site_file(root,'certifi/cacert.pem')
+    if cert is not None:
+        env['SSL_CERT_FILE']=str(cert)
+        env['REQUESTS_CA_BUNDLE']=str(cert)
+    return env
+
 def verify_hash(path: Path, expected: str) -> None:
     if not re.fullmatch(r'[0-9a-f]{64}',expected): raise ReviewError('Invalid SHA256 in tool lock')
     if file_hash(path)!=expected: raise ReviewError(f'Integrity check failed: {path.name}; artifact will not be executed')
@@ -38,7 +55,7 @@ def download(asset: dict, directory: Path) -> Path:
     target=directory/asset['filename']; no_symlinks(target)
     if target.exists():
         verify_hash(target,asset['sha256']); return target
-    req=urllib.request.Request(asset['url'],headers={'User-Agent':'SecurityReviewProject/2.0'})
+    req=urllib.request.Request(asset['url'],headers={'User-Agent':'CommitScope/'+__version__})
     if not asset['url'].startswith('https://'): raise ReviewError('Only HTTPS tool downloads are allowed')
     fd,tmp=tempfile.mkstemp(prefix='.download-',dir=directory)
     try:
@@ -60,20 +77,64 @@ def extract_binary(archive: Path, name: str, target: Path) -> None:
     no_symlinks(target)
     try:
         with tarfile.open(archive,'r:gz') as tf:
-            matches=[m for m in tf.getmembers() if m.name in (name,'./'+name)]
-            if len(matches)!=1 or not matches[0].isfile() or matches[0].size>160*1024*1024:
+            safe_path(name)
+            members=[]; matches=[]
+            for member in tf.getmembers():
+                raw=member.name[2:] if member.name.startswith('./') else member.name
+                rel=safe_path(raw).as_posix()
+                if member.issym() or member.islnk():
+                    raise ReviewError(f'Archive links are not allowed: {member.name}')
+                if not (member.isfile() or member.isdir()):
+                    raise ReviewError(f'Unsupported archive member type: {member.name}')
+                members.append(rel)
+                if rel==name:
+                    matches.append(member)
+            if len(matches)!=1 or not matches[0].isfile() or matches[0].size>MAX_BINARY_BYTES:
                 raise ReviewError(f'Expected one regular {name} binary in release archive')
+            if not (matches[0].mode & 0o111):
+                raise ReviewError(f'Expected executable {name} binary in release archive')
+            if len(members)!=len(set(members)): raise ReviewError('Duplicate release archive member path')
             f=tf.extractfile(matches[0])
             if f is None: raise ReviewError('Missing binary data in archive')
-            data=f.read(160*1024*1024+1)
-            if len(data)!=matches[0].size: raise ReviewError('Truncated binary archive')
             fd,tmp=tempfile.mkstemp(prefix='.binary-',dir=target.parent)
             try:
-                with os.fdopen(fd,'wb') as out: out.write(data)
+                total=0
+                with os.fdopen(fd,'wb') as out:
+                    while chunk:=f.read(1024*1024):
+                        total+=len(chunk)
+                        if total>MAX_BINARY_BYTES: raise ReviewError(f'{name} binary exceeds size limit')
+                        out.write(chunk)
+                    out.flush(); os.fsync(out.fileno())
+                if total!=matches[0].size: raise ReviewError('Truncated binary archive')
                 os.chmod(tmp,0o700); os.replace(tmp,target)
             finally:
+                f.close()
                 if os.path.exists(tmp): os.unlink(tmp)
     except (tarfile.TarError,OSError) as e: raise ReviewError(f'Cannot unpack {name}: {e}') from e
+
+def version_present(expected: str, text: str) -> bool:
+    return re.search(r'(?<![0-9.])'+re.escape(expected)+r'(?![0-9.])',text) is not None
+
+def inspect_semgrep(root: Path, path: Path, expected: str, home: Path) -> dict:
+    no_symlinks(path)
+    env=semgrep_child_env(root,home)
+    cli=execute([str(path),'--version'],home,env,30)
+    cli_text=(cli.stdout+'\n'+cli.stderr).strip()
+    python=root/'semgrep-env/bin/python'
+    core=semgrep_site_file(root,'semgrep/bin/semgrep-core')
+    if not (python.is_file() and core is not None):
+        good=cli.code==0 and not cli.timed_out and not cli.truncated and version_present(expected,cli_text)
+        return {'ok':good,'expected':expected,'reported':cli_text[:1000],'sha256':file_hash(path)}
+    no_symlinks(python)
+    package=execute([str(python),'-I','-c','import importlib.metadata; print(importlib.metadata.version("semgrep"))'],home,env,30)
+    package_text=(package.stdout+'\n'+package.stderr).strip()
+    core_result=execute([str(core),'-version'],home,env,30)
+    core_text=(core_result.stdout+'\n'+core_result.stderr).strip()
+    reported='\n'.join(('package: '+package_text,'core: '+core_text,'cli: '+cli_text))
+    good=(cli.code==0 and not cli.timed_out and not cli.truncated
+          and package.code==0 and not package.timed_out and not package.truncated and version_present(expected,package_text)
+          and core_result.code==0 and not core_result.timed_out and not core_result.truncated and version_present(expected,core_text))
+    return {'ok':good,'expected':expected,'reported':reported[:1000],'sha256':file_hash(path)}
 
 def inspect_tools(root: Path=TOOLS) -> dict:
     spec=lock(); paths=tool_paths(root); result={}
@@ -84,10 +145,13 @@ def inspect_tools(root: Path=TOOLS) -> dict:
             if not path.is_file():
                 result[name]={'ok':False,'error':'not installed','expected':expected}; continue
             try:
+                if name=='semgrep':
+                    result[name]=inspect_semgrep(root,path,expected,home)
+                    continue
                 no_symlinks(path)
                 r=execute([str(path),'version' if name=='gitleaks' else '--version'],home,env,30)
                 text=(r.stdout+'\n'+r.stderr).strip()
-                good=r.code==0 and re.search(r'(?<![0-9.])'+re.escape(expected)+r'(?![0-9.])',text) is not None
+                good=r.code==0 and version_present(expected,text)
                 result[name]={'ok':good,'expected':expected,'reported':text[:1000],'sha256':file_hash(path)}
             except ReviewError as e: result[name]={'ok':False,'error':str(e),'expected':expected}
     return result
