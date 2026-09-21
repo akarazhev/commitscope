@@ -1,5 +1,31 @@
 # Changelog
 
+## 2.2.0 — 2026-09-21
+
+Scanner-ready CommitScope rebrand and portability hardening.
+
+- Rename the public project to **CommitScope** with the description
+  "Evidence-driven security review for Git repositories"; keep `sec_review` and
+  `review.py` for compatibility.
+- Keep Claude Code as an optional AI verification layer only. CommitScope is not an
+  official Anthropic product and scanner-only readiness does not require AI.
+- Fix macOS `/var -> /private/var` test/temp behavior without weakening strict
+  symlink rejection for target repositories, output directories, evidence files, and
+  other user-controlled paths.
+- Harden release archive extraction for native scanners: validate every tar member,
+  reject traversal, absolute paths, symlinks, hardlinks, unsupported member types,
+  duplicate executable paths, and oversized executables.
+- Fix Trivy 0.74.0 bootstrap on Ubuntu by allowing the pinned Linux executable size
+  and selecting the exact root-level `trivy` executable from the official multi-file
+  release archive.
+- Expand CI to run unit/protocol tests on Ubuntu and macOS for Python 3.11-3.14, and
+  run real live-scanner acceptance on Ubuntu and macOS with Python 3.14.
+- Update README, START-HERE, and verification guidance to separate unit/protocol
+  tests, real scanner acceptance, and optional AI verification.
+
+**Qualification:** scanner-ready is not production certification. Native Windows
+remains out of scope. Live AI acceptance requires separate explicit operator consent.
+
 ## 2.1.1 — 2026-09-20
 
 Standalone clean-start build; extract into a new directory. No prior release,
