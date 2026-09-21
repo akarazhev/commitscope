@@ -1,5 +1,7 @@
 """Pinned project-local scanner installation. No sudo; no target dependencies."""
 from __future__ import annotations
+import base64
+import csv
 import os
 from pathlib import Path
 import platform
@@ -51,6 +53,19 @@ def verify_hash(path: Path, expected: str) -> None:
     if not re.fullmatch(r'[0-9a-f]{64}',expected): raise ReviewError('Invalid SHA256 in tool lock')
     if file_hash(path)!=expected: raise ReviewError(f'Integrity check failed: {path.name}; artifact will not be executed')
 
+def recorded_sha256_matches(record: Path, recorded_path: str, actual: Path) -> bool:
+    """Bind an installed console script to the wheel RECORD produced by pip."""
+    try:
+        no_symlinks(record); no_symlinks(actual)
+        if not record.is_file() or record.stat().st_size > 10*1024*1024 or not actual.is_file(): return False
+        with record.open(encoding='utf-8',newline='') as source:
+            matches=[row for row in csv.reader(source) if len(row)>=3 and row[0]==recorded_path]
+        if len(matches)!=1 or not matches[0][1].startswith('sha256='): return False
+        digest=base64.urlsafe_b64encode(bytes.fromhex(file_hash(actual))).decode('ascii').rstrip('=')
+        return matches[0][1]=='sha256='+digest and matches[0][2]==str(actual.stat().st_size)
+    except (OSError,ValueError,csv.Error):
+        return False
+
 def download(asset: dict, directory: Path) -> Path:
     target=directory/asset['filename']; no_symlinks(target)
     if target.exists():
@@ -89,7 +104,7 @@ def extract_binary(archive: Path, name: str, target: Path) -> None:
                 members.append(rel)
                 if rel==name:
                     matches.append(member)
-            if len(matches)!=1 or not matches[0].isfile() or matches[0].size>MAX_BINARY_BYTES:
+            if len(matches)!=1 or not matches[0].isfile() or not 0<matches[0].size<=MAX_BINARY_BYTES:
                 raise ReviewError(f'Expected one regular {name} binary in release archive')
             if not (matches[0].mode & 0o111):
                 raise ReviewError(f'Expected executable {name} binary in release archive')
@@ -123,17 +138,21 @@ def inspect_semgrep(root: Path, path: Path, expected: str, home: Path) -> dict:
     python=root/'semgrep-env/bin/python'
     core=semgrep_site_file(root,'semgrep/bin/semgrep-core')
     if not (python.is_file() and core is not None):
-        good=cli.code==0 and not cli.timed_out and not cli.truncated and version_present(expected,cli_text)
-        return {'ok':good,'expected':expected,'reported':cli_text[:1000],'sha256':file_hash(path)}
+        return {'ok':False,'expected':expected,'reported':cli_text[:1000],
+                'error':'Semgrep package interpreter or bundled core is missing','sha256':file_hash(path)}
     no_symlinks(python)
+    record=semgrep_site_file(root,f'semgrep-{expected}.dist-info/RECORD')
+    wrapper_recorded=(record is not None and recorded_sha256_matches(record,'../../../bin/semgrep',path))
     package=execute([str(python),'-I','-c','import importlib.metadata; print(importlib.metadata.version("semgrep"))'],home,env,30)
     package_text=(package.stdout+'\n'+package.stderr).strip()
     core_result=execute([str(core),'-version'],home,env,30)
     core_text=(core_result.stdout+'\n'+core_result.stderr).strip()
-    reported='\n'.join(('package: '+package_text,'core: '+core_text,'cli: '+cli_text))
+    reported='\n'.join(('package: '+package_text,'core: '+core_text,'cli: '+cli_text,
+                        'wrapper_record: '+('verified' if wrapper_recorded else 'mismatch')))
     good=(cli.code==0 and not cli.timed_out and not cli.truncated
           and package.code==0 and not package.timed_out and not package.truncated and version_present(expected,package_text)
-          and core_result.code==0 and not core_result.timed_out and not core_result.truncated and version_present(expected,core_text))
+          and core_result.code==0 and not core_result.timed_out and not core_result.truncated and version_present(expected,core_text)
+          and wrapper_recorded)
     return {'ok':good,'expected':expected,'reported':reported[:1000],'sha256':file_hash(path)}
 
 def inspect_tools(root: Path=TOOLS) -> dict:

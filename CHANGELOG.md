@@ -14,7 +14,9 @@ Scanner-ready CommitScope rebrand and portability hardening.
   other user-controlled paths.
 - Harden release archive extraction for native scanners: validate every tar member,
   reject traversal, absolute paths, symlinks, hardlinks, unsupported member types,
-  duplicate executable paths, and oversized executables.
+  duplicate executable paths, empty payloads, and oversized executables.
+- Bind the Semgrep launcher checked by `doctor` to the SHA-256 and size recorded by
+  its pinned wheel, in addition to checking the package and bundled core versions.
 - Fix Trivy 0.74.0 bootstrap on Ubuntu by allowing the pinned Linux executable size
   and selecting the exact root-level `trivy` executable from the official multi-file
   release archive.

@@ -5,6 +5,8 @@ that Semgrep/Gitleaks/Trivy install, find real defects, or accept all CLI flags.
 The `review.py demo` command and the live-scanners CI job use actual releases.
 """
 from pathlib import Path
+import base64
+import hashlib
 import subprocess
 import sys
 import tempfile
@@ -51,6 +53,17 @@ class PipelineProtocolTests(unittest.TestCase):
         for tool,path in [('semgrep','semgrep-env/bin/semgrep'),('gitleaks','bin/gitleaks'),('trivy','bin/trivy')]:
             p=self.tools/path; p.parent.mkdir(parents=True,exist_ok=True)
             p.write_text('#!'+sys.executable+'\n'+DOUBLE); p.chmod(0o700)
+        python=self.tools/'semgrep-env/bin/python'
+        python.write_text('#!/bin/sh\necho 1.177.0\n'); python.chmod(0o700)
+        core=self.tools/'semgrep-env/lib/python3.14/site-packages/semgrep/bin/semgrep-core'
+        core.parent.mkdir(parents=True); core.write_text('#!/bin/sh\necho semgrep-core version: 1.177.0\n'); core.chmod(0o700)
+        cert=self.tools/'semgrep-env/lib/python3.14/site-packages/certifi/cacert.pem'
+        cert.parent.mkdir(parents=True); cert.write_text('protocol-only cert fixture')
+        wrapper=self.tools/'semgrep-env/bin/semgrep'
+        digest=base64.urlsafe_b64encode(hashlib.sha256(wrapper.read_bytes()).digest()).decode().rstrip('=')
+        record=self.tools/'semgrep-env/lib/python3.14/site-packages/semgrep-1.177.0.dist-info/RECORD'
+        record.parent.mkdir(parents=True)
+        record.write_text(f'../../../bin/semgrep,sha256={digest},{wrapper.stat().st_size}\n')
     def git(self,*args):
         return subprocess.check_output(['git','-C',str(self.repo),*args],stderr=subprocess.STDOUT).decode().strip()
     def test_successful_protocol_produces_three_report_formats(self):

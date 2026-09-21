@@ -1,3 +1,4 @@
+import base64
 import hashlib
 import io
 import json
@@ -64,6 +65,11 @@ class CoreTests(unittest.TestCase):
             with self.assertRaises(ReviewError): no_symlinks(alias/'out')
 
 class InstallerTests(unittest.TestCase):
+    def semgrep_record(self, root, wrapper):
+        digest=base64.urlsafe_b64encode(hashlib.sha256(wrapper.read_bytes()).digest()).decode().rstrip('=')
+        record=root/'semgrep-env/lib/python3.14/site-packages/semgrep-1.177.0.dist-info/RECORD'
+        record.parent.mkdir(parents=True,exist_ok=True)
+        record.write_text(f'../../../bin/semgrep,sha256={digest},{wrapper.stat().st_size}\n')
     def archive(self, path, name, kind=tarfile.REGTYPE, data=b'binary', mode=0o755):
         with tarfile.open(path, 'w:gz') as t:
             info=tarfile.TarInfo(name); info.type=kind; info.size=len(data) if kind==tarfile.REGTYPE else 0
@@ -138,6 +144,12 @@ class InstallerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             p=Path(d); self.archive(p/'a.tgz','gitleaks',mode=0o600)
             with self.assertRaises(ReviewError): extract_binary(p/'a.tgz','gitleaks',p/'binary')
+    def test_archive_empty_binary_rejected(self):
+        from sec_review.tools import extract_binary
+        from sec_review.core import ReviewError
+        with tempfile.TemporaryDirectory() as d:
+            p=Path(d); self.archive(p/'a.tgz','gitleaks',data=b'',mode=0o755)
+            with self.assertRaises(ReviewError): extract_binary(p/'a.tgz','gitleaks',p/'binary')
     def test_bad_hash_rejected_before_use(self):
         from sec_review.tools import verify_hash
         from sec_review.core import ReviewError
@@ -174,6 +186,26 @@ class InstallerTests(unittest.TestCase):
                 p=root/tool; p.parent.mkdir(parents=True,exist_ok=True); p.write_text(body); p.chmod(0o700)
             cert=root/'semgrep-env/lib/python3.14/site-packages/certifi/cacert.pem'
             cert.parent.mkdir(parents=True); cert.write_text('certs')
+            self.semgrep_record(root,root/'semgrep-env/bin/semgrep')
             result=inspect_tools(root)
             self.assertTrue(result['semgrep']['ok'],result['semgrep'])
             self.assertIn('cli: 1.172.0',result['semgrep']['reported'])
+    def test_semgrep_doctor_rejects_wrapper_changed_after_install(self):
+        from sec_review.tools import inspect_tools
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d)
+            files={
+                'bin/gitleaks':'#!/bin/sh\necho 8.30.1\n',
+                'bin/trivy':'#!/bin/sh\necho Version: 0.74.0\n',
+                'semgrep-env/bin/python':'#!/bin/sh\necho 1.177.0\n',
+                'semgrep-env/bin/semgrep':'#!/bin/sh\necho 1.172.0\n',
+                'semgrep-env/lib/python3.14/site-packages/semgrep/bin/semgrep-core':'#!/bin/sh\necho semgrep-core version: 1.177.0\n',
+            }
+            for relative,body in files.items():
+                path=root/relative; path.parent.mkdir(parents=True,exist_ok=True); path.write_text(body); path.chmod(0o700)
+            cert=root/'semgrep-env/lib/python3.14/site-packages/certifi/cacert.pem'
+            cert.parent.mkdir(parents=True); cert.write_text('certs')
+            record=root/'semgrep-env/lib/python3.14/site-packages/semgrep-1.177.0.dist-info/RECORD'
+            record.parent.mkdir(parents=True)
+            record.write_text('../../../bin/semgrep,sha256=original-wheel-wrapper,999\n')
+            self.assertFalse(inspect_tools(root)['semgrep']['ok'])
