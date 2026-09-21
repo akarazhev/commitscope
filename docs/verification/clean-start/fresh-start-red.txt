@@ -1,0 +1,100 @@
+test_internal_temp_alias_is_canonicalized_without_relaxing_target_policy (test_fresh_start.FreshStartTests.test_internal_temp_alias_is_canonicalized_without_relaxing_target_policy) ... FAIL
+test_native_claude_discovered_without_shell_restart (test_fresh_start.FreshStartTests.test_native_claude_discovered_without_shell_restart) ... ERROR
+test_native_launcher_may_be_an_official_style_symlink (test_fresh_start.FreshStartTests.test_native_launcher_may_be_an_official_style_symlink) ... ERROR
+test_preflight_command_is_available_before_installation (test_fresh_start.FreshStartTests.test_preflight_command_is_available_before_installation) ... FAIL
+test_shell_wrapper_honors_explicit_python (test_fresh_start.FreshStartTests.test_shell_wrapper_honors_explicit_python) ... FAIL
+
+======================================================================
+ERROR: test_native_claude_discovered_without_shell_restart (test_fresh_start.FreshStartTests.test_native_claude_discovered_without_shell_restart)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/mnt/data/_clean21/patched/security-review-project-en/tests/test_fresh_start.py", line 27, in test_native_claude_discovered_without_shell_restart
+    prepared=prepare_claude(self.work,'subscription')
+  File "/mnt/data/_clean21/patched/security-review-project-en/sec_review/auth.py", line 152, in prepare_claude
+    raise ReviewError('Claude Code is not installed/on PATH. Install the official CLI and read docs/AI.md.')
+sec_review.core.ReviewError: Claude Code is not installed/on PATH. Install the official CLI and read docs/AI.md.
+
+======================================================================
+ERROR: test_native_launcher_may_be_an_official_style_symlink (test_fresh_start.FreshStartTests.test_native_launcher_may_be_an_official_style_symlink)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/mnt/data/_clean21/patched/security-review-project-en/tests/test_fresh_start.py", line 34, in test_native_launcher_may_be_an_official_style_symlink
+    prepared=prepare_claude(self.work,'subscription')
+  File "/mnt/data/_clean21/patched/security-review-project-en/sec_review/auth.py", line 152, in prepare_claude
+    raise ReviewError('Claude Code is not installed/on PATH. Install the official CLI and read docs/AI.md.')
+sec_review.core.ReviewError: Claude Code is not installed/on PATH. Install the official CLI and read docs/AI.md.
+
+======================================================================
+FAIL: test_internal_temp_alias_is_canonicalized_without_relaxing_target_policy (test_fresh_start.FreshStartTests.test_internal_temp_alias_is_canonicalized_without_relaxing_target_policy)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/mnt/data/_clean21/patched/security-review-project-en/tests/test_fresh_start.py", line 44, in test_internal_temp_alias_is_canonicalized_without_relaxing_target_policy
+    for cwd,env in seen:self.assertEqual(cwd,cwd.resolve())
+                        ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+AssertionError: PosixPath('/tmp/tmprv1pql18/temp-alias') != PosixPath('/tmp/tmprv1pql18/work')
+
+======================================================================
+FAIL: test_preflight_command_is_available_before_installation (test_fresh_start.FreshStartTests.test_preflight_command_is_available_before_installation)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/usr/lib/python3.13/argparse.py", line 1951, in _parse_known_args2
+    namespace, args = self._parse_known_args(args, namespace, intermixed)
+                      ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.13/argparse.py", line 2206, in _parse_known_args
+    stop_index = consume_positionals(start_index)
+  File "/usr/lib/python3.13/argparse.py", line 2158, in consume_positionals
+    take_action(action, args)
+    ~~~~~~~~~~~^^^^^^^^^^^^^^
+  File "/usr/lib/python3.13/argparse.py", line 2012, in take_action
+    argument_values = self._get_values(action, argument_strings)
+  File "/usr/lib/python3.13/argparse.py", line 2542, in _get_values
+    self._check_value(action, value[0])
+    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.13/argparse.py", line 2592, in _check_value
+    raise ArgumentError(action, msg % args)
+argparse.ArgumentError: argument command: invalid choice: 'preflight' (choose from bootstrap, doctor, scan, ai, auth-check, demo, compare)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/mnt/data/_clean21/patched/security-review-project-en/tests/test_fresh_start.py", line 56, in test_preflight_command_is_available_before_installation
+    with contextlib.redirect_stderr(io.StringIO()):args=parser().parse_args(['preflight'])
+                                                        ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.13/argparse.py", line 1912, in parse_args
+    args, argv = self.parse_known_args(args, namespace)
+                 ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.13/argparse.py", line 1922, in parse_known_args
+    return self._parse_known_args2(args, namespace, intermixed=False)
+           ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.13/argparse.py", line 1953, in _parse_known_args2
+    self.error(str(err))
+    ~~~~~~~~~~^^^^^^^^^^
+  File "/usr/lib/python3.13/argparse.py", line 2672, in error
+    self.exit(2, _('%(prog)s: error: %(message)s\n') % args)
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.13/argparse.py", line 2659, in exit
+    _sys.exit(status)
+    ~~~~~~~~~^^^^^^^^
+SystemExit: 2
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/mnt/data/_clean21/patched/security-review-project-en/tests/test_fresh_start.py", line 57, in test_preflight_command_is_available_before_installation
+    except SystemExit:self.fail('A first-install prerequisite check must be available before downloading tools')
+                      ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: A first-install prerequisite check must be available before downloading tools
+
+======================================================================
+FAIL: test_shell_wrapper_honors_explicit_python (test_fresh_start.FreshStartTests.test_shell_wrapper_honors_explicit_python)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/mnt/data/_clean21/patched/security-review-project-en/tests/test_fresh_start.py", line 50, in test_shell_wrapper_honors_explicit_python
+    self.assertEqual(r.returncode,0,r.stderr)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 43 != 0 : 
+
+----------------------------------------------------------------------
+Ran 5 tests in 0.045s
+
+FAILED (failures=3, errors=2)

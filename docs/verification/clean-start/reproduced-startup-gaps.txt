@@ -1,0 +1,2 @@
+Native installation exists at $HOME/.local/bin/claude but PATH not refreshed: Claude Code is not installed/on PATH. Install the official CLI and read docs/AI.md.
+Internal temp path through an OS-style symlink: Refusing symbolic-link path: /tmp/tmp4jn4bkd5/temp-alias

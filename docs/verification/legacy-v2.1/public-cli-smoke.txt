@@ -1,0 +1,91 @@
+$ python3 -I review.py --version
+Exit: 0
+2.1.0
+
+
+$ python3 -I review.py ai --help
+Exit: 0
+usage: review.py ai [-h] --run RUN --auth {subscription,api}
+                    [--allow-code-upload] [--model MODEL]
+                    [--budget-usd BUDGET_USD] [--max-turns MAX_TURNS]
+                    [--ai-timeout AI_TIMEOUT]
+
+options:
+  -h, --help            show this help message and exit
+  --run RUN
+  --auth {subscription,api}
+                        Explicit credential/billing mode; never automatically
+                        falls back
+  --allow-code-upload   Explicitly consent to sending selected source excerpts
+                        to Anthropic
+  --model MODEL         Claude model alias or exact model ID; set an exact ID
+                        for evaluated deployments
+  --budget-usd BUDGET_USD
+                        API-only total CLI budget (default 4 USD), split
+                        across two calls; not a subscription quota
+  --max-turns MAX_TURNS
+                        Turn limit per Claude call (1-20; default 3)
+  --ai-timeout AI_TIMEOUT
+                        Wall-clock seconds per Claude call (1-3600; default
+                        240)
+
+
+$ python3 -I review.py scan --help
+Exit: 0
+usage: review.py scan [-h] --repo REPO [--ref REF] [--base BASE] [--out OUT]
+                      [--timeout TIMEOUT] [--offline]
+                      [--allow-empty-sca REASON]
+                      [--fail-on {low,medium,high,critical}] [--ai]
+                      [--auth {subscription,api}] [--allow-code-upload]
+                      [--model MODEL] [--budget-usd BUDGET_USD]
+                      [--max-turns MAX_TURNS] [--ai-timeout AI_TIMEOUT]
+
+options:
+  -h, --help            show this help message and exit
+  --repo REPO
+  --ref REF
+  --base BASE
+  --out OUT
+  --timeout TIMEOUT
+  --offline             Use cached Trivy DB; missing/stale DB is an incomplete
+                        scan
+  --allow-empty-sca REASON
+                        Explicit owner declaration when there are no third-
+                        party dependencies
+  --fail-on {low,medium,high,critical}
+  --ai                  After scanning, make two Claude Code calls
+  --auth {subscription,api}
+                        Explicit credential/billing mode; never automatically
+                        falls back
+  --allow-code-upload   Explicitly consent to sending selected source excerpts
+                        to Anthropic
+  --model MODEL         Claude model alias or exact model ID; set an exact ID
+                        for evaluated deployments
+  --budget-usd BUDGET_USD
+                        API-only total CLI budget (default 4 USD), split
+                        across two calls; not a subscription quota
+  --max-turns MAX_TURNS
+                        Turn limit per Claude call (1-20; default 3)
+  --ai-timeout AI_TIMEOUT
+                        Wall-clock seconds per Claude call (1-3600; default
+                        240)
+
+
+$ python3 -I review.py auth-check --help
+Exit: 0
+usage: review.py auth-check [-h] --auth {subscription,api}
+
+options:
+  -h, --help            show this help message and exit
+  --auth {subscription,api}
+
+
+$ python3 -I review.py auth-check --auth subscription
+Exit: 2
+
+INCOMPLETE: Claude Code is not installed/on PATH. Install the official CLI and read docs/AI.md.
+
+$ python3 -I review.py auth-check --auth api
+Exit: 2
+
+INCOMPLETE: --auth api requires ANTHROPIC_API_KEY. No fallback to subscription login is performed.

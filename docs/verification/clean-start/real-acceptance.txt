@@ -1,0 +1,6 @@
+[host-prerequisites] Starting real command: review.py preflight
+[install-scanners] Starting real command: review.py bootstrap
+install-scanners failed (exit 2); see /mnt/data/_clean21/nonroot/acceptance/logs/install-scanners.log
+ACCEPTANCE_INCOMPLETE: /mnt/data/_clean21/nonroot/acceptance/acceptance.json
+
+EXIT_CODE=2

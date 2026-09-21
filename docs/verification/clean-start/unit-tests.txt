@@ -1,0 +1,212 @@
+test_real_examples_and_active_ci_exist (test_acceptance.AcceptanceTests.test_real_examples_and_active_ci_exist) ... ok
+test_runnable_entrypoint_and_documented_commands (test_acceptance.AcceptanceTests.test_runnable_entrypoint_and_documented_commands) ... ok
+test_scanner_bootstrap_script_exists (test_acceptance.AcceptanceTests.test_scanner_bootstrap_script_exists) ... ok
+test_cli_disables_tools_discovery_and_persistence (test_ai.AITests.test_cli_disables_tools_discovery_and_persistence) ... ok
+test_code_upload_requires_explicit_consent (test_ai.AITests.test_code_upload_requires_explicit_consent) ... ok
+test_duplicate_candidate_ids_rejected (test_ai.AITests.test_duplicate_candidate_ids_rejected) ... ok
+test_envelope_requires_successful_structured_output (test_ai.AITests.test_envelope_requires_successful_structured_output) ... ok
+test_hunter_output_paths_bound_to_packet (test_ai.AITests.test_hunter_output_paths_bound_to_packet) ... ok
+test_packet_omits_files_with_detected_secrets (test_ai.AITests.test_packet_omits_files_with_detected_secrets) ... ok
+test_packet_reports_budget_omissions (test_ai.AITests.test_packet_reports_budget_omissions) ... ok
+test_verifier_must_cover_every_candidate (test_ai.AITests.test_verifier_must_cover_every_candidate) ... ok
+test_credentials_echoed_by_cli_are_redacted_from_saved_logs (test_ai_pipeline.AIPipelineProtocolTests.test_credentials_echoed_by_cli_are_redacted_from_saved_logs) ... Running semgrep...
+Running gitleaks...
+Running trivy-vuln...
+Running trivy-iac...
+ok
+test_missing_api_key_is_incomplete_and_does_not_write_source_packet (test_ai_pipeline.AIPipelineProtocolTests.test_missing_api_key_is_incomplete_and_does_not_write_source_packet) ... Running semgrep...
+Running gitleaks...
+Running trivy-vuln...
+Running trivy-iac...
+ok
+test_non_structured_response_is_incomplete (test_ai_pipeline.AIPipelineProtocolTests.test_non_structured_response_is_incomplete) ... Running semgrep...
+Running gitleaks...
+Running trivy-vuln...
+Running trivy-iac...
+ok
+test_subscription_quota_failure_is_incomplete_without_api_fallback (test_ai_pipeline.AIPipelineProtocolTests.test_subscription_quota_failure_is_incomplete_without_api_fallback) ... Running semgrep...
+Running gitleaks...
+Running trivy-vuln...
+Running trivy-iac...
+ok
+test_subscription_saved_login_runs_two_calls_and_drops_ambient_api_key (test_ai_pipeline.AIPipelineProtocolTests.test_subscription_saved_login_runs_two_calls_and_drops_ambient_api_key) ... Running semgrep...
+Running gitleaks...
+Running trivy-vuln...
+Running trivy-iac...
+ok
+test_subscription_token_runs_two_calls_without_using_api_key (test_ai_pipeline.AIPipelineProtocolTests.test_subscription_token_runs_two_calls_without_using_api_key) ... Running semgrep...
+Running gitleaks...
+Running trivy-vuln...
+Running trivy-iac...
+ok
+test_two_calls_save_results_without_suppressing_rejected_candidate (test_ai_pipeline.AIPipelineProtocolTests.test_two_calls_save_results_without_suppressing_rejected_candidate) ... Running semgrep...
+Running gitleaks...
+Running trivy-vuln...
+Running trivy-iac...
+ok
+test_wrong_subscription_auth_status_stops_before_source_packet (test_ai_pipeline.AIPipelineProtocolTests.test_wrong_subscription_auth_status_stops_before_source_packet) ... Running semgrep...
+Running gitleaks...
+Running trivy-vuln...
+Running trivy-iac...
+ok
+test_api_rejects_subscription_status (test_auth.AuthContractTests.test_api_rejects_subscription_status) ... ok
+test_api_status_accepts_only_expected_key_source (test_auth.AuthContractTests.test_api_status_accepts_only_expected_key_source) ... ok
+test_invalid_status_error_does_not_echo_untrusted_values (test_auth.AuthContractTests.test_invalid_status_error_does_not_echo_untrusted_values) ... ok
+test_no_login_and_unknown_status_fail_closed (test_auth.AuthContractTests.test_no_login_and_unknown_status_fail_closed) ... ok
+test_other_provider_is_rejected (test_auth.AuthContractTests.test_other_provider_is_rejected) ... ok
+test_redactor_removes_known_keys_and_tokens (test_auth.AuthContractTests.test_redactor_removes_known_keys_and_tokens) ... ok
+test_status_accepts_both_subscription_cli_shapes (test_auth.AuthContractTests.test_status_accepts_both_subscription_cli_shapes) ... ok
+test_subscription_rejects_api_console_gateway_and_unknown_methods (test_auth.AuthContractTests.test_subscription_rejects_api_console_gateway_and_unknown_methods) ... ok
+test_subscription_status_with_api_key_source_is_rejected (test_auth.AuthContractTests.test_subscription_status_with_api_key_source_is_rejected) ... ok
+test_api_has_private_home_and_never_uses_oauth (test_auth.AuthEnvironmentTests.test_api_has_private_home_and_never_uses_oauth) ... ok
+test_api_without_key_fails_despite_available_oauth (test_auth.AuthEnvironmentTests.test_api_without_key_fails_despite_available_oauth) ... ok
+test_blank_api_key_is_rejected (test_auth.AuthEnvironmentTests.test_blank_api_key_is_rejected) ... ok
+test_blank_oauth_token_is_not_a_reason_to_use_api (test_auth.AuthEnvironmentTests.test_blank_oauth_token_is_not_a_reason_to_use_api) ... ok
+test_invalid_mode_is_never_inferred_from_available_credentials (test_auth.AuthEnvironmentTests.test_invalid_mode_is_never_inferred_from_available_credentials) ... ok
+test_network_proxy_is_preserved_but_provider_routing_is_not (test_auth.AuthEnvironmentTests.test_network_proxy_is_preserved_but_provider_routing_is_not) ... ok
+test_relative_config_directory_fails_instead_of_changing_login_context (test_auth.AuthEnvironmentTests.test_relative_config_directory_fails_instead_of_changing_login_context) ... ok
+test_saved_login_keeps_custom_claude_config_directory (test_auth.AuthEnvironmentTests.test_saved_login_keeps_custom_claude_config_directory) ... ok
+test_subscription_keeps_login_home_and_drops_api_routes (test_auth.AuthEnvironmentTests.test_subscription_keeps_login_home_and_drops_api_routes) ... ok
+test_token_subscription_uses_private_home_and_no_saved_login (test_auth.AuthEnvironmentTests.test_token_subscription_uses_private_home_and_no_saved_login) ... ok
+test_ai_cli_requires_explicit_auth (test_auth.AuthOptionsTests.test_ai_cli_requires_explicit_auth) ... ok
+test_api_default_budget_and_bounds (test_auth.AuthOptionsTests.test_api_default_budget_and_bounds) ... ok
+test_api_launch_keeps_bare_and_budget (test_auth.AuthOptionsTests.test_api_launch_keeps_bare_and_budget) ... ok
+test_auth_check_command_exists_without_code_upload (test_auth.AuthOptionsTests.test_auth_check_command_exists_without_code_upload) ... ok
+test_both_auth_modes_are_public_cli_choices (test_auth.AuthOptionsTests.test_both_auth_modes_are_public_cli_choices) ... ok
+test_invalid_turns_and_timeouts_fail_before_invoking_cli (test_auth.AuthOptionsTests.test_invalid_turns_and_timeouts_fail_before_invoking_cli) ... ok
+test_scan_ai_needs_auth_before_scanning (test_auth.AuthOptionsTests.test_scan_ai_needs_auth_before_scanning) ... ok
+test_scan_rejects_dollar_budget_in_subscription_mode_before_scan (test_auth.AuthOptionsTests.test_scan_rejects_dollar_budget_in_subscription_mode_before_scan) ... ok
+test_subscription_has_no_dollar_budget (test_auth.AuthOptionsTests.test_subscription_has_no_dollar_budget) ... ok
+test_subscription_launch_uses_safe_mode_not_bare (test_auth.AuthOptionsTests.test_subscription_launch_uses_safe_mode_not_bare) ... ok
+test_auth_failure_stops_without_model_call_or_token_echo (test_auth.AuthPreflightTests.test_auth_failure_stops_without_model_call_or_token_echo) ... ok
+test_hidden_supported_flags_are_not_rejected_by_help_text (test_auth.AuthPreflightTests.test_hidden_supported_flags_are_not_rejected_by_help_text) ... ok
+test_preflight_checks_version_features_and_auth_without_model_or_pii (test_auth.AuthPreflightTests.test_preflight_checks_version_features_and_auth_without_model_or_pii) ... ok
+test_rejected_safe_mode_fails_without_downgrade (test_auth.AuthPreflightTests.test_rejected_safe_mode_fails_without_downgrade) ... ok
+test_environment_does_not_leak_credentials (test_core.CoreTests.test_environment_does_not_leak_credentials) ... ok
+test_json_duplicate_keys_rejected (test_core.CoreTests.test_json_duplicate_keys_rejected) ... ok
+test_json_nonfinite_rejected (test_core.CoreTests.test_json_nonfinite_rejected) ... ok
+test_process_exit_code_and_stdout (test_core.CoreTests.test_process_exit_code_and_stdout) ... ok
+test_safe_paths (test_core.CoreTests.test_safe_paths) ... ok
+test_shell_metacharacters_are_data (test_core.CoreTests.test_shell_metacharacters_are_data) ... ok
+test_timeout_is_not_success (test_core.CoreTests.test_timeout_is_not_success) ... ok
+test_write_refuses_symlink (test_core.CoreTests.test_write_refuses_symlink) ... ok
+test_archive_link_rejected (test_core.InstallerTests.test_archive_link_rejected) ... ok
+test_archive_traversal_not_extracted (test_core.InstallerTests.test_archive_traversal_not_extracted) ... ok
+test_bad_hash_rejected_before_use (test_core.InstallerTests.test_bad_hash_rejected_before_use) ... ok
+test_pins_are_complete (test_core.InstallerTests.test_pins_are_complete) ... ok
+test_platform_selection (test_core.InstallerTests.test_platform_selection) ... ok
+test_verified_binary_extraction (test_core.InstallerTests.test_verified_binary_extraction) ... ok
+test_calculator_keeps_allowed_arithmetic (test_demo_app.DemoApplicationTests.test_calculator_keeps_allowed_arithmetic) ... ok
+test_fixed_calculator_rejects_function_calls (test_demo_app.DemoApplicationTests.test_fixed_calculator_rejects_function_calls) ... ok
+test_fixed_calculator_rejects_large_inputs (test_demo_app.DemoApplicationTests.test_fixed_calculator_rejects_large_inputs) ... ok
+test_fixed_diagnostics_reject_arbitrary_commands (test_demo_app.DemoApplicationTests.test_fixed_diagnostics_reject_arbitrary_commands) ... ok
+test_fixed_fixture_blocks_cross_tenant_read (test_demo_app.DemoApplicationTests.test_fixed_fixture_blocks_cross_tenant_read) ... ok
+test_fixed_fixture_does_not_distinguish_missing_from_unauthorized (test_demo_app.DemoApplicationTests.test_fixed_fixture_does_not_distinguish_missing_from_unauthorized) ... ok
+test_fixed_fixture_preserves_authorized_access (test_demo_app.DemoApplicationTests.test_fixed_fixture_preserves_authorized_access) ... ok
+test_vulnerable_fixture_demonstrates_cross_tenant_read (test_demo_app.DemoApplicationTests.test_vulnerable_fixture_demonstrates_cross_tenant_read) ... ok
+test_internal_temp_alias_is_canonicalized_without_relaxing_target_policy (test_fresh_start.FreshStartTests.test_internal_temp_alias_is_canonicalized_without_relaxing_target_policy) ... ok
+test_native_claude_discovered_without_shell_restart (test_fresh_start.FreshStartTests.test_native_claude_discovered_without_shell_restart) ... ok
+test_native_launcher_may_be_an_official_style_symlink (test_fresh_start.FreshStartTests.test_native_launcher_may_be_an_official_style_symlink) ... ok
+test_preflight_command_is_available_before_installation (test_fresh_start.FreshStartTests.test_preflight_command_is_available_before_installation) ... ok
+test_shell_wrapper_honors_explicit_python (test_fresh_start.FreshStartTests.test_shell_wrapper_honors_explicit_python) ... ok
+test_missing_ensurepip_is_a_prerequisite_error (test_install_acceptance.HostPreflightTests.test_missing_ensurepip_is_a_prerequisite_error) ... ok
+test_missing_git_stops_before_download (test_install_acceptance.HostPreflightTests.test_missing_git_stops_before_download) ... ok
+test_bootstrap_failure_is_saved_and_does_not_start_model (test_install_acceptance.InstallationAcceptanceTests.test_bootstrap_failure_is_saved_and_does_not_start_model) ... [host-prerequisites] Starting real command: review.py preflight
+[install-scanners] Starting real command: review.py bootstrap
+ok
+test_consent_is_required_before_any_external_call (test_install_acceptance.InstallationAcceptanceTests.test_consent_is_required_before_any_external_call) ... ok
+test_existing_evidence_is_not_overwritten (test_install_acceptance.InstallationAcceptanceTests.test_existing_evidence_is_not_overwritten) ... ok
+test_failed_auth_prevents_models_and_no_fallback (test_install_acceptance.InstallationAcceptanceTests.test_failed_auth_prevents_models_and_no_fallback) ... [host-prerequisites] Starting real command: review.py preflight
+[install-scanners] Starting real command: review.py bootstrap
+[scanner-versions] Starting real command: review.py doctor
+[real-scanner-demo] Starting real command: review.py demo
+[auth-subscription] Starting real command: review.py auth-check
+ok
+test_fresh_ubuntu_instructions_and_claude_installer_exist (test_install_acceptance.InstallationAcceptanceTests.test_fresh_ubuntu_instructions_and_claude_installer_exist) ... ok
+test_scanner_only_success_does_not_claim_ai_verified (test_install_acceptance.InstallationAcceptanceTests.test_scanner_only_success_does_not_claim_ai_verified) ... [host-prerequisites] Starting real command: review.py preflight
+[install-scanners] Starting real command: review.py bootstrap
+[scanner-versions] Starting real command: review.py doctor
+[real-scanner-demo] Starting real command: review.py demo
+ok
+test_two_modes_are_independent_and_not_a_billing_fallback (test_install_acceptance.InstallationAcceptanceTests.test_two_modes_are_independent_and_not_a_billing_fallback) ... [host-prerequisites] Starting real command: review.py preflight
+[install-scanners] Starting real command: review.py bootstrap
+[scanner-versions] Starting real command: review.py doctor
+[real-scanner-demo] Starting real command: review.py demo
+[auth-subscription] Starting real command: review.py auth-check
+[fixture-scan-subscription] Starting real command: review.py scan
+[real-ai-subscription] Starting real command: review.py ai
+[auth-api] Starting real command: review.py auth-check
+[fixture-scan-api] Starting real command: review.py scan
+[real-ai-api] Starting real command: review.py ai
+ok
+test_zero_exit_with_no_demo_evidence_does_not_pass (test_install_acceptance.InstallationAcceptanceTests.test_zero_exit_with_no_demo_evidence_does_not_pass) ... [host-prerequisites] Starting real command: review.py preflight
+[install-scanners] Starting real command: review.py bootstrap
+[scanner-versions] Starting real command: review.py doctor
+[real-scanner-demo] Starting real command: review.py demo
+ok
+test_dirty_snapshot_still_writes_failure_report (test_pipeline.PipelineProtocolTests.test_dirty_snapshot_still_writes_failure_report) ... ok
+test_existing_report_is_not_overwritten (test_pipeline.PipelineProtocolTests.test_existing_report_is_not_overwritten) ... Running semgrep...
+Running gitleaks...
+Running trivy-vuln...
+Running trivy-iac...
+ok
+test_findings_are_collected_from_all_four_protocols (test_pipeline.PipelineProtocolTests.test_findings_are_collected_from_all_four_protocols) ... Running semgrep...
+Running gitleaks...
+Running trivy-vuln...
+Running trivy-iac...
+ok
+test_missing_binary_is_incomplete (test_pipeline.PipelineProtocolTests.test_missing_binary_is_incomplete) ... ok
+test_one_failed_process_does_not_become_clean (test_pipeline.PipelineProtocolTests.test_one_failed_process_does_not_become_clean) ... Running semgrep...
+Running gitleaks...
+Running trivy-vuln...
+Running trivy-iac...
+ok
+test_report_directory_cannot_be_inside_subject (test_pipeline.PipelineProtocolTests.test_report_directory_cannot_be_inside_subject) ... ok
+test_successful_protocol_produces_three_report_formats (test_pipeline.PipelineProtocolTests.test_successful_protocol_produces_three_report_formats) ... Running semgrep...
+Running gitleaks...
+Running trivy-vuln...
+Running trivy-iac...
+ok
+test_version_mismatch_prevents_execution (test_pipeline.PipelineProtocolTests.test_version_mismatch_prevents_execution) ... ok
+test_gitleaks_non_object_candidate_is_rejected (test_reports.MalformedScannerOutputTests.test_gitleaks_non_object_candidate_is_rejected) ... ok
+test_semgrep_non_object_candidate_is_rejected (test_reports.MalformedScannerOutputTests.test_semgrep_non_object_candidate_is_rejected) ... ok
+test_semgrep_scanned_paths_must_be_an_array (test_reports.MalformedScannerOutputTests.test_semgrep_scanned_paths_must_be_an_array) ... ok
+test_trivy_inventory_must_be_an_array (test_reports.MalformedScannerOutputTests.test_trivy_inventory_must_be_an_array) ... ok
+test_trivy_non_object_target_is_rejected (test_reports.MalformedScannerOutputTests.test_trivy_non_object_target_is_rejected) ... ok
+test_trivy_unknown_check_kind_is_rejected (test_reports.MalformedScannerOutputTests.test_trivy_unknown_check_kind_is_rejected) ... ok
+test_empty_semgrep_payload_rejected (test_reports.ParserTests.test_empty_semgrep_payload_rejected) ... ok
+test_invalid_trivy_schema_rejected (test_reports.ParserTests.test_invalid_trivy_schema_rejected) ... ok
+test_outside_snapshot_path_rejected (test_reports.ParserTests.test_outside_snapshot_path_rejected) ... ok
+test_secret_value_never_in_normalized_report (test_reports.ParserTests.test_secret_value_never_in_normalized_report) ... ok
+test_semgrep_candidate (test_reports.ParserTests.test_semgrep_candidate) ... ok
+test_semgrep_parse_error_recorded (test_reports.ParserTests.test_semgrep_parse_error_recorded) ... ok
+test_trivy_misconfig_failure_only (test_reports.ParserTests.test_trivy_misconfig_failure_only) ... ok
+test_trivy_vulnerability_and_inventory (test_reports.ParserTests.test_trivy_vulnerability_and_inventory) ... ok
+test_ai_cannot_erase_scanner_findings (test_reports.ReportTests.test_ai_cannot_erase_scanner_findings) ... ok
+test_clean_is_only_scanner_policy_pass (test_reports.ReportTests.test_clean_is_only_scanner_policy_pass) ... ok
+test_duplicate_scanner_cannot_pass (test_reports.ReportTests.test_duplicate_scanner_cannot_pass) ... ok
+test_high_finding_blocks (test_reports.ReportTests.test_high_finding_blocks) ... ok
+test_iac_inline_suppression_requires_review (test_reports.ReportTests.test_iac_inline_suppression_requires_review) ... ok
+test_markdown_and_sarif_escape_paths (test_reports.ReportTests.test_markdown_and_sarif_escape_paths) ... ok
+test_missing_scanner_cannot_pass (test_reports.ReportTests.test_missing_scanner_cannot_pass) ... ok
+test_no_targets_requires_reason (test_reports.ReportTests.test_no_targets_requires_reason) ... ok
+test_requested_ai_failure_is_not_pass (test_reports.ReportTests.test_requested_ai_failure_is_not_pass) ... ok
+test_timeout_or_partial_is_incomplete (test_reports.ReportTests.test_timeout_or_partial_is_incomplete) ... ok
+test_unknown_severity_is_not_ignored (test_reports.ReportTests.test_unknown_severity_is_not_ignored) ... ok
+test_bad_revision_rejected (test_snapshot.SnapshotTests.test_bad_revision_rejected) ... ok
+test_dirty_tree_rejected (test_snapshot.SnapshotTests.test_dirty_tree_rejected) ... ok
+test_export_ignore_does_not_hide_source (test_snapshot.SnapshotTests.test_export_ignore_does_not_hide_source) ... ok
+test_git_fsmonitor_hook_is_disabled (test_snapshot.SnapshotTests.test_git_fsmonitor_hook_is_disabled) ... ok
+test_pinned_snapshot_can_be_reexported_with_dirty_worktree (test_snapshot.SnapshotTests.test_pinned_snapshot_can_be_reexported_with_dirty_worktree) ... ok
+test_scanner_ignore_file_not_trusted (test_snapshot.SnapshotTests.test_scanner_ignore_file_not_trusted) ... ok
+test_snapshot_has_commit_content (test_snapshot.SnapshotTests.test_snapshot_has_commit_content) ... ok
+test_snapshot_size_limit_rejected (test_snapshot.SnapshotTests.test_snapshot_size_limit_rejected) ... ok
+test_symlink_commit_rejected (test_snapshot.SnapshotTests.test_symlink_commit_rejected) ... ok
+test_untracked_files_rejected (test_snapshot.SnapshotTests.test_untracked_files_rejected) ... ok
+
+----------------------------------------------------------------------
+Ran 132 tests in 5.672s
+
+OK
+
+EXIT_CODE=0

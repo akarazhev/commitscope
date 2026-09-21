@@ -1,0 +1,32 @@
+test_calculator_keeps_allowed_arithmetic (test_demo_app.DemoApplicationTests.test_calculator_keeps_allowed_arithmetic) ... ok
+test_fixed_calculator_rejects_function_calls (test_demo_app.DemoApplicationTests.test_fixed_calculator_rejects_function_calls) ... ok
+test_fixed_calculator_rejects_large_inputs (test_demo_app.DemoApplicationTests.test_fixed_calculator_rejects_large_inputs) ... ok
+test_fixed_diagnostics_reject_arbitrary_commands (test_demo_app.DemoApplicationTests.test_fixed_diagnostics_reject_arbitrary_commands) ... ok
+test_fixed_fixture_blocks_cross_tenant_read (test_demo_app.DemoApplicationTests.test_fixed_fixture_blocks_cross_tenant_read) ... ok
+test_fixed_fixture_does_not_distinguish_missing_from_unauthorized (test_demo_app.DemoApplicationTests.test_fixed_fixture_does_not_distinguish_missing_from_unauthorized) ... ok
+test_fixed_fixture_preserves_authorized_access (test_demo_app.DemoApplicationTests.test_fixed_fixture_preserves_authorized_access) ... ok
+test_vulnerable_fixture_demonstrates_cross_tenant_read (test_demo_app.DemoApplicationTests.test_vulnerable_fixture_demonstrates_cross_tenant_read) ... ok
+
+----------------------------------------------------------------------
+Ran 8 tests in 0.001s
+
+OK
+
+{
+  "at": "2026-09-20T20:42:56.893215+00:00",
+  "application_tests": 8,
+  "application_passed": true,
+  "scanner_integration": "failed",
+  "ai_integration": "not_run",
+  "checks": {
+    "all_four_checks_detect_vulnerable_fixture": false,
+    "vulnerable_snapshot_blocks": false,
+    "fixed_snapshot_passes_configured_threshold": false
+  },
+  "vulnerable_head": "1731d06b85d188e50a278e8461309576b1a6203c",
+  "fixed_head": "efa90fa6fd6e5a13730a58ee9022deb72b5c92cd",
+  "status": "DEMO_FAILED_OR_INCOMPLETE",
+  "note": "This demo requires real external scanners; per-check states distinguish executed checks from missing prerequisites. No saved/mocked reports substitute for scanning. New database data or tool behavior may change results; investigate rather than weakening checks."
+}
+Demo artifacts: /mnt/data/_clean21/full-demo
+EXIT_CODE=2

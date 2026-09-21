@@ -1,0 +1,275 @@
+{
+  "rules": [
+    {
+      "id": "sr-python-eval",
+      "languages": [
+        "python"
+      ],
+      "severity": "ERROR",
+      "message": "Dynamic eval: establish whether attacker-controlled text can reach this expression.",
+      "metadata": {
+        "category": "security",
+        "cwe": "CWE-95",
+        "scope": "baseline candidate; verify reachability and existing defenses"
+      },
+      "pattern-either": [
+        {
+          "pattern": "eval(...)"
+        }
+      ]
+    },
+    {
+      "id": "sr-python-exec",
+      "languages": [
+        "python"
+      ],
+      "severity": "ERROR",
+      "message": "Dynamic exec: establish whether attacker-controlled source can reach this call.",
+      "metadata": {
+        "category": "security",
+        "cwe": "CWE-95",
+        "scope": "baseline candidate; verify reachability and existing defenses"
+      },
+      "pattern-either": [
+        {
+          "pattern": "exec(...)"
+        }
+      ]
+    },
+    {
+      "id": "sr-python-shell",
+      "languages": [
+        "python"
+      ],
+      "severity": "ERROR",
+      "message": "Shell invocation: verify input control or replace with a fixed argument vector.",
+      "metadata": {
+        "category": "security",
+        "cwe": "CWE-78",
+        "scope": "baseline candidate; verify reachability and existing defenses"
+      },
+      "pattern-either": [
+        {
+          "pattern": "subprocess.run(..., shell=True, ...)"
+        },
+        {
+          "pattern": "subprocess.call(..., shell=True, ...)"
+        },
+        {
+          "pattern": "subprocess.Popen(..., shell=True, ...)"
+        },
+        {
+          "pattern": "subprocess.check_output(..., shell=True, ...)"
+        },
+        {
+          "pattern": "os.system(...)"
+        }
+      ]
+    },
+    {
+      "id": "sr-python-pickle",
+      "languages": [
+        "python"
+      ],
+      "severity": "ERROR",
+      "message": "Pickle deserialization is unsafe for untrusted input.",
+      "metadata": {
+        "category": "security",
+        "cwe": "CWE-502",
+        "scope": "baseline candidate; verify reachability and existing defenses"
+      },
+      "pattern-either": [
+        {
+          "pattern": "pickle.loads(...)"
+        },
+        {
+          "pattern": "pickle.load(...)"
+        }
+      ]
+    },
+    {
+      "id": "sr-python-yaml",
+      "languages": [
+        "python"
+      ],
+      "severity": "ERROR",
+      "message": "Unsafe YAML loader: use an appropriate safe loader for untrusted data.",
+      "metadata": {
+        "category": "security",
+        "cwe": "CWE-502",
+        "scope": "baseline candidate; verify reachability and existing defenses"
+      },
+      "pattern-either": [
+        {
+          "pattern": "yaml.unsafe_load(...)"
+        },
+        {
+          "pattern": "yaml.load($DATA)"
+        }
+      ]
+    },
+    {
+      "id": "sr-python-sql-construction",
+      "languages": [
+        "python"
+      ],
+      "severity": "ERROR",
+      "message": "SQL built by concatenation/formatting at the execution call: use parameters.",
+      "metadata": {
+        "category": "security",
+        "cwe": "CWE-89",
+        "scope": "baseline candidate; verify reachability and existing defenses"
+      },
+      "pattern-either": [
+        {
+          "pattern": "$DB.execute($A + $B, ...)"
+        },
+        {
+          "pattern": "$DB.execute($A % $B, ...)"
+        }
+      ]
+    },
+    {
+      "id": "sr-python-tls-disabled",
+      "languages": [
+        "python"
+      ],
+      "severity": "ERROR",
+      "message": "TLS certificate verification disabled.",
+      "metadata": {
+        "category": "security",
+        "cwe": "CWE-295",
+        "scope": "baseline candidate; verify reachability and existing defenses"
+      },
+      "pattern-either": [
+        {
+          "pattern": "requests.get(..., verify=False, ...)"
+        },
+        {
+          "pattern": "requests.post(..., verify=False, ...)"
+        },
+        {
+          "pattern": "requests.request(..., verify=False, ...)"
+        }
+      ]
+    },
+    {
+      "id": "sr-python-insecure-temp",
+      "languages": [
+        "python"
+      ],
+      "severity": "WARNING",
+      "message": "mktemp creates a race-prone temporary name.",
+      "metadata": {
+        "category": "security",
+        "cwe": "CWE-377",
+        "scope": "baseline candidate; verify reachability and existing defenses"
+      },
+      "pattern-either": [
+        {
+          "pattern": "tempfile.mktemp(...)"
+        }
+      ]
+    },
+    {
+      "id": "sr-python-debug-server",
+      "languages": [
+        "python"
+      ],
+      "severity": "WARNING",
+      "message": "Debug server enabled; assess deployment exposure.",
+      "metadata": {
+        "category": "security",
+        "cwe": "CWE-489",
+        "scope": "baseline candidate; verify reachability and existing defenses"
+      },
+      "pattern-either": [
+        {
+          "pattern": "$APP.run(..., debug=True, ...)"
+        }
+      ]
+    },
+    {
+      "id": "sr-js-eval",
+      "languages": [
+        "javascript",
+        "typescript"
+      ],
+      "severity": "ERROR",
+      "message": "Dynamic code execution: establish whether untrusted input reaches the call.",
+      "metadata": {
+        "category": "security",
+        "cwe": "CWE-95",
+        "scope": "baseline candidate; verify reachability and existing defenses"
+      },
+      "pattern-either": [
+        {
+          "pattern": "eval(...)"
+        },
+        {
+          "pattern": "new Function(...)"
+        }
+      ]
+    },
+    {
+      "id": "sr-js-shell",
+      "languages": [
+        "javascript",
+        "typescript"
+      ],
+      "severity": "ERROR",
+      "message": "Shell-based child process: establish input control and prefer argument arrays.",
+      "metadata": {
+        "category": "security",
+        "cwe": "CWE-78",
+        "scope": "baseline candidate; verify reachability and existing defenses"
+      },
+      "pattern-either": [
+        {
+          "pattern": "child_process.exec(...)"
+        },
+        {
+          "pattern": "child_process.execSync(...)"
+        }
+      ]
+    },
+    {
+      "id": "sr-js-tls-disabled",
+      "languages": [
+        "javascript",
+        "typescript"
+      ],
+      "severity": "ERROR",
+      "message": "Global TLS certificate validation disabled.",
+      "metadata": {
+        "category": "security",
+        "cwe": "CWE-295",
+        "scope": "baseline candidate; verify reachability and existing defenses"
+      },
+      "pattern-either": [
+        {
+          "pattern": "process.env.NODE_TLS_REJECT_UNAUTHORIZED = \"0\""
+        }
+      ]
+    },
+    {
+      "id": "sr-js-innerhtml",
+      "languages": [
+        "javascript",
+        "typescript"
+      ],
+      "severity": "WARNING",
+      "message": "HTML injection sink: verify trusted/sanitized data and DOM context.",
+      "metadata": {
+        "category": "security",
+        "cwe": "CWE-79",
+        "scope": "baseline candidate; verify reachability and existing defenses"
+      },
+      "pattern-either": [
+        {
+          "pattern": "$ELEMENT.innerHTML = $VALUE"
+        }
+      ]
+    }
+  ]
+}

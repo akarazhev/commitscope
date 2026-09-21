@@ -1,0 +1,21 @@
+usage: review.py [-h] [--version] {bootstrap,doctor,scan,ai,demo,compare} ...
+
+Security Review Project: install scanners, scan a Git commit, and optionally
+review with Claude Code.
+
+positional arguments:
+  {bootstrap,doctor,scan,ai,demo,compare}
+    bootstrap           Install pinned scanners locally without sudo
+    doctor              Check Python/Git and installed scanner versions;
+                        Claude is optional
+    scan                Run real scanners on a clean, committed repository
+                        snapshot
+    ai                  Run bounded discovery and independent verification on
+                        an existing scan
+    demo                Run vulnerable/fixed fixtures and real-scanner
+                        acceptance; never install vulnerable dependencies
+    compare             Compare findings between two scan reports
+
+options:
+  -h, --help            show this help message and exit
+  --version             show program's version number and exit

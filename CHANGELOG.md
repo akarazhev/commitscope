@@ -1,0 +1,62 @@
+# Changelog
+
+## 2.1.1 — 2026-09-20
+
+Standalone clean-start build; extract into a new directory. No prior release,
+migration, project upgrade, or copied credentials is needed.
+
+- Discover the native Claude launcher before shell PATH is refreshed, including
+  the vendor-style symlink. Preserve explicit billing-mode isolation.
+- Canonicalize internally created AI temporary directories without weakening the
+  target snapshot symlink policy.
+- Check Python, platform, Git, venv and pip before any scanner downloads.
+- Honor the explicitly selected PYTHON in the bootstrap shell wrapper.
+- Include an optional official native CLI installer; do not replace an existing CLI.
+- Add an evidence-producing real acceptance runner for scanners and optionally
+  subscription, API, or both. No consent means no live model request.
+- Add 15 regression/orchestration tests (132 total), a clean-start guide, and actual
+  non-root isolated-HOME verification logs.
+
+**Not fully accepted:** real downloads failed DNS; real scanner execution, real
+Claude CLI compatibility, and authenticated requests remain unverified.
+See docs/CLEAN-INSTALL-VERIFICATION.md.
+
+
+## 2.1.0 — 2026-09-19
+
+- Add explicit `--auth subscription` and `--auth api` modes to `ai` and `scan --ai`.
+- Subscription: use the official saved CLI login or an explicitly provided
+  CLAUDE_CODE_OAUTH_TOKEN; use safe mode instead of bare mode.
+- API: keep bare mode, private HOME and ANTHROPIC_API_KEY without OAuth fallback.
+- Isolate authentication environments; do not forward ambient API/provider variables
+  to a subscription invocation. Keep the parent environment and login files intact.
+- Add `auth-check`: local CLI capability/version and selected-auth diagnostics without
+  source upload or a model request. Do not store raw status/account identifiers.
+- Add per-call `--max-turns` and `--ai-timeout`; make `--budget-usd` API-only.
+- Redact known environment credentials from saved CLI output/logs and error text.
+- Add authentication unit/protocol tests and dual-mode setup/migration instructions.
+- Keep scanner versions, snapshot formats, examples and scanner-only CI workflows.
+
+**CLI migration:** existing API scripts must add `--auth api`. Subscription scripts
+must not pass `--budget-usd`. There is no automatic billing-mode selection.
+**Qualification:** local tests do not prove live Claude authentication or billed cost;
+see docs/VERIFICATION.md for this release's measured checks and remaining limits.
+
+## Previous release notes
+
+## 2.0.0 — 2026-09-18
+
+Replaced the methodology-only v1 delivery with a standalone executable source project.
+
+Added project-local scanner installation and version checks; immutable commit export;
+real Semgrep/Gitleaks/Trivy command adapters; conservative execution/coverage results;
+normalized JSON/Markdown/SARIF; vulnerable/fixed fixtures and real-scanner acceptance;
+an optional actual two-stage Claude Code subprocess adapter; active manually controlled
+GitHub Actions workflows; and dependency-free tests.
+
+This is not a drop-in replacement for v1's `reviewctl.py`, installer, report schema,
+or slash commands. Start in a new directory. Existing v1 evidence remains separate.
+
+Local test evidence is included. Successful live scanner downloads/execution,
+GitHub-hosted workflow execution, and authenticated Claude Code review have not been
+established in the packaging environment. See `docs/VERIFICATION.md`.

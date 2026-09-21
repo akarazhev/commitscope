@@ -1,0 +1,40 @@
+test_missing_ensurepip_is_a_prerequisite_error (test_install_acceptance.HostPreflightTests.test_missing_ensurepip_is_a_prerequisite_error) ... ok
+test_missing_git_stops_before_download (test_install_acceptance.HostPreflightTests.test_missing_git_stops_before_download) ... ok
+test_bootstrap_failure_is_saved_and_does_not_start_model (test_install_acceptance.InstallationAcceptanceTests.test_bootstrap_failure_is_saved_and_does_not_start_model) ... [host-prerequisites] Starting real command: review.py preflight
+[install-scanners] Starting real command: review.py bootstrap
+ok
+test_consent_is_required_before_any_external_call (test_install_acceptance.InstallationAcceptanceTests.test_consent_is_required_before_any_external_call) ... ok
+test_existing_evidence_is_not_overwritten (test_install_acceptance.InstallationAcceptanceTests.test_existing_evidence_is_not_overwritten) ... ok
+test_failed_auth_prevents_models_and_no_fallback (test_install_acceptance.InstallationAcceptanceTests.test_failed_auth_prevents_models_and_no_fallback) ... [host-prerequisites] Starting real command: review.py preflight
+[install-scanners] Starting real command: review.py bootstrap
+[scanner-versions] Starting real command: review.py doctor
+[real-scanner-demo] Starting real command: review.py demo
+[auth-subscription] Starting real command: review.py auth-check
+ok
+test_fresh_ubuntu_instructions_and_claude_installer_exist (test_install_acceptance.InstallationAcceptanceTests.test_fresh_ubuntu_instructions_and_claude_installer_exist) ... ok
+test_scanner_only_success_does_not_claim_ai_verified (test_install_acceptance.InstallationAcceptanceTests.test_scanner_only_success_does_not_claim_ai_verified) ... [host-prerequisites] Starting real command: review.py preflight
+[install-scanners] Starting real command: review.py bootstrap
+[scanner-versions] Starting real command: review.py doctor
+[real-scanner-demo] Starting real command: review.py demo
+ok
+test_two_modes_are_independent_and_not_a_billing_fallback (test_install_acceptance.InstallationAcceptanceTests.test_two_modes_are_independent_and_not_a_billing_fallback) ... [host-prerequisites] Starting real command: review.py preflight
+[install-scanners] Starting real command: review.py bootstrap
+[scanner-versions] Starting real command: review.py doctor
+[real-scanner-demo] Starting real command: review.py demo
+[auth-subscription] Starting real command: review.py auth-check
+[fixture-scan-subscription] Starting real command: review.py scan
+[real-ai-subscription] Starting real command: review.py ai
+[auth-api] Starting real command: review.py auth-check
+[fixture-scan-api] Starting real command: review.py scan
+[real-ai-api] Starting real command: review.py ai
+ok
+test_zero_exit_with_no_demo_evidence_does_not_pass (test_install_acceptance.InstallationAcceptanceTests.test_zero_exit_with_no_demo_evidence_does_not_pass) ... [host-prerequisites] Starting real command: review.py preflight
+[install-scanners] Starting real command: review.py bootstrap
+[scanner-versions] Starting real command: review.py doctor
+[real-scanner-demo] Starting real command: review.py demo
+ok
+
+----------------------------------------------------------------------
+Ran 10 tests in 0.047s
+
+OK

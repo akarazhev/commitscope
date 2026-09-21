@@ -1,0 +1,52 @@
+{
+  "schema_version": "1.0",
+  "project_version": "2.1.1",
+  "started_at": "2026-09-20T20:51:31.471128+00:00",
+  "status": "ACCEPTANCE_INCOMPLETE",
+  "python": "3.13.5",
+  "platform": "Linux-6.18.44-x86_64-with-glibc2.41",
+  "project_tools_present_at_start": false,
+  "old_release_files_required": false,
+  "selected_auth_modes": [],
+  "live_ai_modes_verified": [],
+  "stages": [
+    {
+      "name": "host-prerequisites",
+      "command": [
+        "/mnt/data/_clean21/nonroot/python/bin/python3",
+        "-I",
+        "/mnt/data/_clean21/nonroot/security-review-project-en/review.py",
+        "preflight"
+      ],
+      "status": "passed",
+      "exit_code": 0,
+      "seconds": 2.47,
+      "timed_out": false,
+      "log": "logs/host-prerequisites.log"
+    },
+    {
+      "name": "install-scanners",
+      "command": [
+        "/mnt/data/_clean21/nonroot/python/bin/python3",
+        "-I",
+        "/mnt/data/_clean21/nonroot/security-review-project-en/review.py",
+        "bootstrap"
+      ],
+      "status": "failed",
+      "exit_code": 2,
+      "seconds": 2.47,
+      "timed_out": false,
+      "log": "logs/install-scanners.log",
+      "error": "install-scanners failed (exit 2); see /mnt/data/_clean21/nonroot/acceptance/logs/install-scanners.log"
+    }
+  ],
+  "tool_lock_sha256": "69de9e590ad6fadedec0cea9ac83fb559a303f08f58c128be9ae9ffb6c85d258",
+  "scope": "This host and this bundle only. Not a clean-OS certificate, security-quality benchmark or production approval.",
+  "error": "install-scanners failed (exit 2); see /mnt/data/_clean21/nonroot/acceptance/logs/install-scanners.log",
+  "finished_at": "2026-09-20T20:51:36.415813+00:00",
+  "exit_code": 2,
+  "ai_modes_not_verified": [
+    "subscription",
+    "api"
+  ]
+}

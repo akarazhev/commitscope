@@ -1,0 +1,69 @@
+name: Scan a repository commit
+on:
+  workflow_dispatch:
+    inputs:
+      target_repository:
+        description: Authorized target in owner/repository format
+        required: true
+        type: string
+      target_sha:
+        description: Full commit SHA to scan (not a branch name)
+        required: true
+        type: string
+permissions:
+  contents: read
+jobs:
+  scan:
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Validate parameters before any target checkout
+        env:
+          TARGET_REPOSITORY: ${{ inputs.target_repository }}
+          TARGET_SHA: ${{ inputs.target_sha }}
+        run: |
+          python3 -I - <<'PY'
+          import os, re
+          if not re.fullmatch(r'[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+', os.environ['TARGET_REPOSITORY']):
+              raise SystemExit('Expected owner/repository')
+          if not re.fullmatch(r'[0-9a-f]{40}', os.environ['TARGET_SHA']):
+              raise SystemExit('Expected a full 40-character GitHub commit SHA')
+          PY
+      - name: Load the review project from its trusted default branch
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          path: review-runner
+          persist-credentials: false
+      - name: Read the selected target commit without submodules or LFS
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          repository: ${{ inputs.target_repository }}
+          ref: ${{ inputs.target_sha }}
+          token: ${{ secrets.TARGET_REPO_TOKEN || github.token }}
+          path: subject
+          persist-credentials: false
+          submodules: false
+          lfs: false
+          fetch-depth: 1
+      - name: Install scanners in the review project, not in the subject
+        run: sh review-runner/scripts/bootstrap.sh
+      - name: Confirm the selected commit and run all scanner checks
+        env:
+          EXPECTED_HEAD: ${{ inputs.target_sha }}
+        run: |
+          test "$(git -C subject rev-parse HEAD)" = "$EXPECTED_HEAD"
+          python3 -I review-runner/review.py scan \
+            --repo subject --ref "$EXPECTED_HEAD" --out reports/review
+      - name: Preserve normalized results only, not source/raw/AI inputs
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: security-review-${{ github.run_id }}
+          retention-days: 7
+          if-no-files-found: warn
+          path: |
+            reports/review/report.json
+            reports/review/report.md
+            reports/review/report.sarif

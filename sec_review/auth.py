@@ -1,0 +1,203 @@
+"""Explicit Claude Code authentication selection; never auto-switch billing paths.
+
+Credentials remain in the official CLI's environment/store. This module does not
+read, copy, exchange, refresh, or serialize saved OAuth credentials itself.
+"""
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+import math
+import os
+from pathlib import Path
+import re
+import shutil
+import tempfile
+from typing import Any
+
+from .core import ROOT, ReviewError, child_env, decode_json, execute
+
+AUTH_MODES = ('subscription', 'api')
+CREDENTIAL_ENV_KEYS = ('ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'CLAUDE_CODE_OAUTH_TOKEN')
+
+
+def require_mode(mode: str | None) -> str:
+    if mode not in AUTH_MODES:
+        raise ReviewError('Choose --auth subscription or --auth api explicitly; authentication is never auto-selected.')
+    return mode
+
+
+def validate_ai_options(mode: str | None, budget: float | None,
+                        max_turns: int, timeout: int) -> float | None:
+    """Resolve API budget only. A subscription quota is not a USD budget."""
+    require_mode(mode)
+    if type(max_turns) is not int or not 1 <= max_turns <= 20:
+        raise ReviewError('--max-turns must be an integer from 1 to 20 per Claude call.')
+    if type(timeout) is not int or not 1 <= timeout <= 3600:
+        raise ReviewError('--ai-timeout must be an integer from 1 to 3600 seconds per Claude call.')
+    if mode == 'subscription':
+        if budget is not None:
+            raise ReviewError('--budget-usd is API-only; use --max-turns and --ai-timeout with --auth subscription. Plan limits still apply.')
+        return None
+    budget = 4.0 if budget is None else budget
+    if isinstance(budget, bool) or not isinstance(budget, (int, float)) or not math.isfinite(budget) or not 0 < budget <= 100:
+        raise ReviewError('API budget must be greater than 0 and at most 100 USD for this adapter.')
+    return float(budget)
+
+
+def mode_flag(mode: str) -> str:
+    require_mode(mode)
+    return '--safe-mode' if mode == 'subscription' else '--bare'
+
+
+def settings_flags(mode: str) -> list[str]:
+    """Used for status and model calls; do not load unreviewed user/project settings."""
+    return [mode_flag(mode), '--setting-sources', '',
+            '--settings', str(ROOT / 'config/claude-settings.json')]
+
+
+def _credential(name: str) -> str | None:
+    value = os.environ.get(name)
+    if value is None or value == '':
+        return None
+    if value.strip() != value or any(ord(c) < 32 or ord(c) == 127 for c in value):
+        raise ReviewError(f'{name} is blank or contains whitespace/control characters; configure the selected credential again.')
+    return value
+
+
+def _absolute_directory(value: str, label: str) -> str:
+    path = Path(value).expanduser()
+    if not path.is_absolute() or not path.is_dir():
+        raise ReviewError(f'{label} must name an existing absolute directory for saved Claude login. Run login as the same OS user.')
+    return str(path)
+
+
+def claude_environment(private_home: Path, mode: str) -> tuple[dict[str, str], dict[str, Any]]:
+    """Whitelist the selected credential source, not the entire caller environment.
+
+    The saved-login path preserves HOME/CLAUDE_CONFIG_DIR for the official CLI's
+    keychain or credentials store. Token and API-key paths use a temporary HOME.
+    Scanner subprocesses continue to use child_env() without any AI credentials.
+    """
+    require_mode(mode)
+    env = child_env(private_home, network=True)
+    env['CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC'] = '1'
+    env['DISABLE_AUTOUPDATER'] = '1'
+    if mode == 'api':
+        key = _credential('ANTHROPIC_API_KEY')
+        if not key:
+            raise ReviewError('--auth api requires ANTHROPIC_API_KEY. No fallback to subscription login is performed.')
+        env['ANTHROPIC_API_KEY'] = key
+        source = 'api_key_env'
+    else:
+        token = _credential('CLAUDE_CODE_OAUTH_TOKEN')
+        if token:
+            env['CLAUDE_CODE_OAUTH_TOKEN'] = token
+            source = 'oauth_token_env'
+        else:
+            env['HOME'] = _absolute_directory(os.environ.get('HOME') or str(Path.home()), 'HOME')
+            if os.environ.get('CLAUDE_CONFIG_DIR'):
+                env['CLAUDE_CONFIG_DIR'] = _absolute_directory(os.environ['CLAUDE_CONFIG_DIR'], 'CLAUDE_CONFIG_DIR')
+            source = 'claude_login'
+    ignored = sorted(key for key, value in os.environ.items() if value and key not in env
+                     and (key.startswith('ANTHROPIC_') or key.startswith('CLAUDE_CODE_USE_')
+                          or key in ('CLAUDE_CODE_OAUTH_TOKEN', 'CLAUDE_CONFIG_DIR', 'CLAUDE_CODE_SIMPLE')))
+    return env, {'auth_mode': mode, 'credential_source': source, 'ignored_auth_environment': ignored}
+
+
+def validate_auth_status(value: Any, mode: str) -> dict[str, str]:
+    """Accept known local status shapes. Unknown shapes are not a billing guess.
+
+    Local status is NOT a server-side entitlement, quota, or token-validity test.
+    Do not return email, account IDs, raw auth output, or credential values.
+    """
+    require_mode(mode)
+    if not isinstance(value, dict) or value.get('loggedIn') is not True:
+        raise ReviewError('Claude has no recognized login for the selected mode. Run claude auth login for a subscription, or configure the API key for --auth api.')
+    if value.get('apiProvider') != 'firstParty':
+        raise ReviewError('Claude selected an unsupported provider. This adapter supports subscription OAuth or the direct Anthropic API only; inspect claude auth status.')
+    method = value.get('authMethod')
+    if mode == 'subscription':
+        if method not in ('claude.ai', 'oauth_token') or value.get('apiKeySource') not in (None, ''):
+            raise ReviewError('Claude auth status does not match --auth subscription. Use a claude.ai login or CLAUDE_CODE_OAUTH_TOKEN; Console/profile/API credentials are not accepted. No API fallback is performed.')
+    elif method != 'api_key' or value.get('apiKeySource') != 'ANTHROPIC_API_KEY':
+        raise ReviewError('Claude auth status does not match --auth api with ANTHROPIC_API_KEY. No subscription fallback is performed.')
+    return {'auth_method': method, 'provider': 'firstParty'}
+
+
+def redact_credentials(text: str, child: dict[str, str] | None = None) -> str:
+    """Defense in depth for known environment secrets, not complete log sanitization."""
+    import json
+    values = {env[key] for env in (os.environ, child or {}) for key in CREDENTIAL_ENV_KEYS if env.get(key)}
+    for value in sorted(values, key=len, reverse=True):
+        for form in {value, json.dumps(value, ensure_ascii=False)[1:-1], json.dumps(value)[1:-1]}:
+            text = text.replace(form, '[REDACTED_CREDENTIAL]')
+    return text
+
+
+@dataclass
+class PreparedClaude:
+    executable: str
+    env: dict[str, str] = field(repr=False)
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+
+def locate_claude(path: str | None = None) -> str | None:
+    """Find the official CLI, including a native install before a shell restart.
+
+    PATH remains authoritative. The fallback is the operator's HOME, never a
+    target repository or the temporary API credential HOME. The native launcher
+    is normally a symlink; this is an operator-trusted executable, not target code.
+    """
+    found = shutil.which('claude', path=path)
+    if found:
+        return found
+    home = Path(os.environ.get('HOME') or str(Path.home())).expanduser()
+    if not home.is_absolute():
+        return None
+    candidate = home / '.local/bin/claude'
+    if candidate.is_file() and os.access(candidate, os.X_OK):
+        return str(candidate)
+    return None
+
+
+def prepare_claude(work: Path, mode: str) -> PreparedClaude:
+    """Check local capabilities and active auth before sending any source packet."""
+    require_mode(mode)
+    # Canonicalize this operator-created temporary directory (e.g. macOS /var).
+    # Do not relax the policy that rejects symlinks in target snapshots.
+    work = work.resolve(strict=True)
+    home = work / 'home'
+    home.mkdir(mode=0o700, exist_ok=True)
+    env, metadata = claude_environment(home, mode)
+    executable = locate_claude(env['PATH'])
+    if not executable:
+        raise ReviewError('Claude Code was not found on PATH or at $HOME/.local/bin/claude. Run sh scripts/install-claude.sh, then read docs/AUTHENTICATION.md.')
+    common = settings_flags(mode)
+    help_result = execute([executable, *common, '--help'], work, env, 30)
+    if help_result.code != 0 or help_result.timed_out or help_result.truncated:
+        raise ReviewError('Claude CLI capability check failed. Run claude --help and update the official CLI; no less restricted fallback is used.')
+    # Upstream intentionally omits supported options from --help. Do not infer
+    # unsupported flags from absent help text. Keep every launch restriction;
+    # actual option errors stop the selected invocation, never trigger fallback.
+    version = execute([executable, *common, '--version'], work, env, 30)
+    match = re.search(r'(?<![0-9])([0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,4})(?![0-9])', version.stdout)
+    if version.code != 0 or version.timed_out or version.truncated or not match:
+        raise ReviewError('Cannot determine the Claude CLI version; inspect claude --version.')
+    result = execute([executable, *common, 'auth', 'status'], work, env, 30)
+    if result.code != 0 or result.timed_out or result.truncated:
+        raise ReviewError('Claude auth check failed for the selected mode. Run claude auth login for subscription or verify ANTHROPIC_API_KEY for API. No model request or credential fallback was attempted.')
+    try:
+        status = decode_json(redact_credentials(result.stdout, env))
+    except ReviewError:
+        raise ReviewError('Claude auth status returned an unrecognized JSON response; update/check the CLI. Raw auth output is not saved.') from None
+    metadata.update(validate_auth_status(status, mode))
+    metadata.update(status='READY_LOCAL_AUTH', claude_version=match.group(1),
+                    model_request_tested=False,
+                    note='Local CLI status only: token validity, plan entitlement, quota, network access, model access and billing have not been tested.')
+    return PreparedClaude(executable, env, metadata)
+
+
+def check_auth(mode: str) -> dict[str, Any]:
+    """Public non-model diagnostic; never reads the application or initiates login."""
+    with tempfile.TemporaryDirectory(prefix='sr-auth-') as directory:
+        return prepare_claude(Path(directory), mode).metadata

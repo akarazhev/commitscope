@@ -1,0 +1,2 @@
+# The fixture uses only Python's standard library. The unused dependency was removed.
+# The real-scanner demo explicitly records this SCA applicability declaration.

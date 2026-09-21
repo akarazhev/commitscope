@@ -1,0 +1,5 @@
+curl: (6) Could not resolve host: claude.ai
+curl: (6) Could not resolve host: claude.ai
+curl: (6) Could not resolve host: claude.ai
+
+EXIT_CODE=6

@@ -1,0 +1,2 @@
+# Deliberately outdated UNUSED dependency; scanned as data, never installed.
+requests==2.19.1

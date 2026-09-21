@@ -1,0 +1,17 @@
+{
+  "type":"object","additionalProperties":false,
+  "required":["summary","findings","limitations"],
+  "properties":{
+    "summary":{"type":"string"},
+    "limitations":{"type":"array","items":{"type":"string"}},
+    "findings":{"type":"array","maxItems":30,"items":{
+      "type":"object","additionalProperties":false,
+      "required":["id","path","line","severity","title","evidence","counterarguments","reproduction"],
+      "properties":{
+        "id":{"type":"string","pattern":"^AI-[0-9]{3}$"},"path":{"type":"string"},
+        "line":{"type":"integer","minimum":1},"severity":{"type":"string","enum":["critical","high","medium","low","unknown"]},
+        "title":{"type":"string"},"evidence":{"type":"string"},"counterarguments":{"type":"string"},"reproduction":{"type":"string"}
+      }
+    }}
+  }
+}

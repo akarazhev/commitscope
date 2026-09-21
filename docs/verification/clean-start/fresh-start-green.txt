@@ -1,0 +1,10 @@
+test_internal_temp_alias_is_canonicalized_without_relaxing_target_policy (test_fresh_start.FreshStartTests.test_internal_temp_alias_is_canonicalized_without_relaxing_target_policy) ... ok
+test_native_claude_discovered_without_shell_restart (test_fresh_start.FreshStartTests.test_native_claude_discovered_without_shell_restart) ... ok
+test_native_launcher_may_be_an_official_style_symlink (test_fresh_start.FreshStartTests.test_native_launcher_may_be_an_official_style_symlink) ... ok
+test_preflight_command_is_available_before_installation (test_fresh_start.FreshStartTests.test_preflight_command_is_available_before_installation) ... ok
+test_shell_wrapper_honors_explicit_python (test_fresh_start.FreshStartTests.test_shell_wrapper_honors_explicit_python) ... ok
+
+----------------------------------------------------------------------
+Ran 5 tests in 0.035s
+
+OK

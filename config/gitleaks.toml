@@ -1,0 +1,9 @@
+title = "Security Review Project — built-in rules plus synthetic demo token"
+[extend]
+useDefault = true
+
+[[rules]]
+id = "sr-synthetic-demo-token"
+description = "Synthetic demonstration token (never a real credential)"
+regex = '''sr_demo_[0-9a-f]{32}'''
+keywords = ["sr_demo_"]

@@ -1,0 +1,3 @@
+INCOMPLETE: --auth api requires ANTHROPIC_API_KEY. No fallback to subscription login is performed.
+
+EXIT_CODE=2

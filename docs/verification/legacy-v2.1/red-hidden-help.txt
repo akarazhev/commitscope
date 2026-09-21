@@ -1,0 +1,16 @@
+test_hidden_supported_flags_are_not_rejected_by_help_text (test_auth.AuthPreflightTests.test_hidden_supported_flags_are_not_rejected_by_help_text) ... ERROR
+
+======================================================================
+ERROR: test_hidden_supported_flags_are_not_rejected_by_help_text (test_auth.AuthPreflightTests.test_hidden_supported_flags_are_not_rejected_by_help_text)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/mnt/data/_auth-upgrade/security-review-project-en/tests/test_auth.py", line 288, in test_hidden_supported_flags_are_not_rejected_by_help_text
+    prepared = prepare_claude(self.root, 'subscription')
+  File "/mnt/data/_auth-upgrade/security-review-project-en/sec_review/auth.py", line 166, in prepare_claude
+    raise ReviewError('Installed Claude Code lacks required flag ' + flag + '; update it. This adapter does not downgrade its launch restrictions.')
+sec_review.core.ReviewError: Installed Claude Code lacks required flag --tools; update it. This adapter does not downgrade its launch restrictions.
+
+----------------------------------------------------------------------
+Ran 1 test in 0.003s
+
+FAILED (errors=1)

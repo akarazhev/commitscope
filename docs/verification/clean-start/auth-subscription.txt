@@ -1,0 +1,3 @@
+INCOMPLETE: Claude Code was not found on PATH or at $HOME/.local/bin/claude. Run sh scripts/install-claude.sh, then read docs/AUTHENTICATION.md.
+
+EXIT_CODE=2

@@ -1,0 +1,9 @@
+{
+  "status": "HOST_PREREQUISITES_PASSED",
+  "python": "3.13.5",
+  "platform": "linux-x86_64",
+  "git": "git version 2.47.3",
+  "venv_with_pip": true,
+  "note": "No network, scanner, database, Claude login or model request has been verified."
+}
+

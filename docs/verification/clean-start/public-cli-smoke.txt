@@ -1,0 +1,73 @@
+COMMAND: python3 -I review.py --version
+2.1.1
+EXIT_CODE=0
+COMMAND: python3 -I review.py --help
+usage: review.py [-h] [--version]
+                 {preflight,bootstrap,doctor,scan,ai,auth-check,demo,compare} ...
+
+Security Review Project: install scanners, scan a Git commit, and optionally
+review with Claude Code.
+
+positional arguments:
+  {preflight,bootstrap,doctor,scan,ai,auth-check,demo,compare}
+    preflight           Check fresh-host Python/Git/venv prerequisites without
+                        network access
+    bootstrap           Install pinned scanners locally without sudo
+    doctor              Check Python/Git and installed scanner versions;
+                        Claude is optional
+    scan                Run real scanners on a clean, committed repository
+                        snapshot
+    ai                  Run bounded discovery and independent verification on
+                        an existing scan
+    auth-check          Check local Claude CLI capabilities/auth; no source
+                        upload or model request
+    demo                Run vulnerable/fixed fixtures and real-scanner
+                        acceptance; never install vulnerable dependencies
+    compare             Compare findings between two scan reports
+
+options:
+  -h, --help            show this help message and exit
+  --version             show program's version number and exit
+EXIT_CODE=0
+COMMAND: python3 -I review.py preflight
+{
+  "status": "HOST_PREREQUISITES_PASSED",
+  "python": "3.13.5",
+  "platform": "linux-x86_64",
+  "git": "git version 2.47.3",
+  "venv_with_pip": true,
+  "note": "No network, scanner, database, Claude login or model request has been verified."
+}
+EXIT_CODE=0
+COMMAND: python3 -I review.py auth-check --help
+usage: review.py auth-check [-h] --auth {subscription,api}
+
+options:
+  -h, --help            show this help message and exit
+  --auth {subscription,api}
+EXIT_CODE=0
+COMMAND: python3 -I review.py ai --help
+usage: review.py ai [-h] --run RUN --auth {subscription,api}
+                    [--allow-code-upload] [--model MODEL]
+                    [--budget-usd BUDGET_USD] [--max-turns MAX_TURNS]
+                    [--ai-timeout AI_TIMEOUT]
+
+options:
+  -h, --help            show this help message and exit
+  --run RUN
+  --auth {subscription,api}
+                        Explicit credential/billing mode; never automatically
+                        falls back
+  --allow-code-upload   Explicitly consent to sending selected source excerpts
+                        to Anthropic
+  --model MODEL         Claude model alias or exact model ID; set an exact ID
+                        for evaluated deployments
+  --budget-usd BUDGET_USD
+                        API-only total CLI budget (default 4 USD), split
+                        across two calls; not a subscription quota
+  --max-turns MAX_TURNS
+                        Turn limit per Claude call (1-20; default 3)
+  --ai-timeout AI_TIMEOUT
+                        Wall-clock seconds per Claude call (1-3600; default
+                        240)
+EXIT_CODE=0

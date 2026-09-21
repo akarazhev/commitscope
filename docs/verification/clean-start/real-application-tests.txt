@@ -1,0 +1,25 @@
+test_calculator_keeps_allowed_arithmetic (test_demo_app.DemoApplicationTests.test_calculator_keeps_allowed_arithmetic) ... ok
+test_fixed_calculator_rejects_function_calls (test_demo_app.DemoApplicationTests.test_fixed_calculator_rejects_function_calls) ... ok
+test_fixed_calculator_rejects_large_inputs (test_demo_app.DemoApplicationTests.test_fixed_calculator_rejects_large_inputs) ... ok
+test_fixed_diagnostics_reject_arbitrary_commands (test_demo_app.DemoApplicationTests.test_fixed_diagnostics_reject_arbitrary_commands) ... ok
+test_fixed_fixture_blocks_cross_tenant_read (test_demo_app.DemoApplicationTests.test_fixed_fixture_blocks_cross_tenant_read) ... ok
+test_fixed_fixture_does_not_distinguish_missing_from_unauthorized (test_demo_app.DemoApplicationTests.test_fixed_fixture_does_not_distinguish_missing_from_unauthorized) ... ok
+test_fixed_fixture_preserves_authorized_access (test_demo_app.DemoApplicationTests.test_fixed_fixture_preserves_authorized_access) ... ok
+test_vulnerable_fixture_demonstrates_cross_tenant_read (test_demo_app.DemoApplicationTests.test_vulnerable_fixture_demonstrates_cross_tenant_read) ... ok
+
+----------------------------------------------------------------------
+Ran 8 tests in 0.001s
+
+OK
+
+{
+  "at": "2026-09-20T20:52:58.712556+00:00",
+  "application_tests": 8,
+  "application_passed": true,
+  "scanner_integration": "not_run",
+  "ai_integration": "not_run",
+  "status": "APPLICATION_TESTS_PASSED_SCANNERS_NOT_RUN"
+}
+Demo artifacts: /mnt/data/_clean21/nonroot/application-only
+
+EXIT_CODE=0
