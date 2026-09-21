@@ -1,14 +1,15 @@
 # Installation and maintenance
 
-For a new host, begin with [START-HERE](../START-HERE.md). No earlier release or migration is required.
+For a new host, begin with [START-HERE](../START-HERE.md). No earlier release or
+migration is required. The public project name is CommitScope; the internal Python
+package remains `sec_review` for compatibility.
 
 ## Host prerequisites
 
 Use Python **3.11–3.14** with `venv` and pip, Git, and certificate roots. Linux must use
 glibc **2.34 or later**; Alpine/musl is not supported by this installer. The lock file
-contains Linux/macOS assets for x86-64 and ARM64. These platform entries are not a
-claim that all four combinations were tested. Windows requires a compatible Linux
-installation under WSL2; there is no native PowerShell installer in this release.
+contains Linux/macOS assets for x86-64 and ARM64. Native Windows is outside scope;
+use a compatible Linux installation under WSL2 instead.
 
 Ubuntu 24.04 host prerequisites, when absent:
 
@@ -36,8 +37,9 @@ project directory, not in your application's virtual environment.
 
 `sh scripts/bootstrap.sh` calls the Python installer. It downloads the selected
 platform archives/wheel from the exact URLs in `config/tools.lock.json`, checks their
-SHA256 digests, extracts only the expected regular native binaries, installs Semgrep
-in an isolated project-local venv, and checks each reported version.
+SHA256 digests, validates release archive members before extraction, extracts only
+the expected root-level regular native binaries, installs Semgrep in an isolated
+project-local venv, and checks each reported version.
 
 Nothing is installed into the target application. Its requirements, setup scripts,
 package-manager hooks, and Dockerfile are not executed. No API token is required for
@@ -119,7 +121,8 @@ Claude CLI on the same host, then choose one of the two modes in
 [Authentication](AUTHENTICATION.md): saved personal subscription/OAuth token, or direct
 API key. `python3 -I review.py auth-check --auth subscription` and `--auth api` are
 independent of scanner installation. They verify local configuration only, not a
-real model request. No credential is needed for scanner-only commands.
+real model request. No credential is needed for scanner-only commands. CommitScope is
+not an official Anthropic product.
 
 ## Before downloading
 

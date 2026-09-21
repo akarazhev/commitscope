@@ -17,7 +17,7 @@ from .demo import demo
 
 
 def parser() -> argparse.ArgumentParser:
-    p=argparse.ArgumentParser(description='Security Review Project: install scanners, scan a Git commit, and optionally review with Claude Code.')
+    p=argparse.ArgumentParser(description='CommitScope: Evidence-driven security review for Git repositories.')
     p.add_argument('--version',action='version',version=__version__)
     sub=p.add_subparsers(dest='command',required=True)
     sub.add_parser('preflight',help='Check fresh-host Python/Git/venv prerequisites without network access')

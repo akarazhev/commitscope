@@ -1,4 +1,4 @@
-title = "Security Review Project — built-in rules plus synthetic demo token"
+title = "CommitScope — built-in rules plus synthetic demo token"
 [extend]
 useDefault = true
 

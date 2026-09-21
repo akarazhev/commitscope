@@ -66,7 +66,7 @@ def sarif(report: dict) -> dict:
                                                           'region':{'startLine':max(1,f['line'])}}}],
                         'properties':{'verificationStatus':f.get('status','scanner_finding')}})
     return {'version':'2.1.0','$schema':'https://json.schemastore.org/sarif-2.1.0.json','runs':[{
-        'tool':{'driver':{'name':'Security Review Project','version':__version__,'rules':rules}},'results':results,
+        'tool':{'driver':{'name':'CommitScope','version':__version__,'rules':rules}},'results':results,
         'invocations':[{'executionSuccessful':decision(report)['exit_code']!=2}],
         'properties':{'head':report.get('snapshot',{}).get('head'),'policyDecision':decision(report)['status']}}]}
 

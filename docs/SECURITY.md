@@ -1,13 +1,13 @@
-# Trust boundaries and limitations
+# CommitScope trust boundaries and limitations
 
 ## What is trusted
 
-The operator, review-project source/configuration, tool lock, downloaded upstream tools,
+The operator, CommitScope source/configuration, tool lock, downloaded upstream tools,
 Python environment, executable search PATH, local OS account, and approved subscription/API credentials
 are trusted. The target's code, comments, filenames, manifests, and model outputs are not
 instructions to change reviewer policy.
 
-Keep the review project in a separate protected directory/repository. Do not load its
+Keep CommitScope in a separate protected directory/repository. Do not load its
 rules, Python modules, hooks, or tool lock from an unreviewed target PR. Launch with
 `python3 -I review.py` so Python path/environment injection is restricted; this does not
 turn Python or native scanner processes into an OS sandbox.

@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from pathlib import Path
 from .core import ROOT, ReviewError, digest, safe_path, read_json, execute, child_env, private_dir, file_hash, write_text
+from .tools import semgrep_child_env
 
 
 def location(value: str, source: Path) -> str:
@@ -100,7 +101,8 @@ def run_scanners(source: Path, out: Path, paths: dict[str,Path], *, tools_root: 
         print(f'Running {name}...',flush=True)
         item={'name':name,'status':'failed','reason':'','command':command,'raw_report':f'raw/{name}.json'}
         try:
-            r=execute(command,cwd,child_env(home,network=name.startswith('trivy')),timeout)
+            env=semgrep_child_env(tools_root,home) if name=='semgrep' else child_env(home,network=name.startswith('trivy'))
+            r=execute(command,cwd,env,timeout)
             item.update(exit_code=r.code,duration_seconds=r.seconds,timed_out=r.timed_out)
             write_text(raw/(name+'.log'),r.stdout+'\n'+r.stderr)
             if r.timed_out or r.truncated: raise ReviewError('Timeout or truncated process output; check is incomplete')

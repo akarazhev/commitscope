@@ -1,7 +1,8 @@
 # Authentication: personal subscription and API
 
-Release 2.1.1 implements two **explicit** Claude Code modes. It uses the installed
-Claude Code executable, not a separate API client impersonating Claude Code.
+CommitScope 2.2.0 keeps Claude Code as an optional AI verification layer with two
+**explicit** modes. It uses the installed Claude Code executable, not a separate
+API client impersonating Claude Code.
 No account, API key, subscription, or CLI binary is bundled with the project.
 
 | Mode | Credential source | Startup | Resource limits |
@@ -159,9 +160,9 @@ Proxy/certificate variables are preserved for approved networking, not alternate
 credential selection. The supplied GitHub workflows remain scanner-only and do
 not read either credential or upload AI/source artifacts.
 
-## Migration from v2.0
+## Migration from earlier releases
 
-Unpack v2.1 into a separate directory. Merge reviewed project-specific context and
+Keep using the existing `review.py` entry point. Merge reviewed project-specific context and
 rules; do not overwrite your application. Re-run bootstrap and doctor or reuse
 only tools verified against the unchanged lock. Use a new output directory for
 new scans. A v2.0 report with schema `2.0` can be used for an AI review if its
@@ -174,7 +175,7 @@ subscription mode. No scanner authentication or installation behavior changed.
 [plans]: https://support.claude.com/en/articles/11145838-use-claude-code-with-your-pro-or-max-plan
 [cli]: https://code.claude.com/docs/en/cli-reference
 
-## Fresh-install entry point (2.1.1)
+## Fresh-install entry point
 
 Follow [START-HERE](../START-HERE.md) for a standalone installation.
 `sh scripts/install-claude.sh` is an optional wrapper around the official native

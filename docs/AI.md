@@ -2,8 +2,9 @@
 
 ## Choose the authentication mode
 
-Install the official Claude Code CLI, then follow [Authentication](AUTHENTICATION.md).
-Release 2.1 supports both a personal subscription and a direct Anthropic API key:
+Install the official Claude Code CLI only when optional AI verification is needed,
+then follow [Authentication](AUTHENTICATION.md). CommitScope supports both a
+personal subscription and a direct Anthropic API key:
 
 ```bash
 # Existing Claude subscription login; no API key is needed.
