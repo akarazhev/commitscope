@@ -43,3 +43,23 @@ This selection is not a claim that its binary was downloaded or executed here.
 The top-level native installer is fetched over verified TLS and is not hash-pinned
 by this project. The scanner asset pins remain unchanged. Review of upstream
 release metadata does not prove successful download, installation or execution.
+
+## Scanner-ready recheck — 2026-09-21
+
+The Trivy 0.74.0 release archive structure was checked against the official
+release asset. The pinned `.tar.gz` archives contain multiple files, including
+`LICENSE`, `README.md`, `contrib/*.tpl`, and a root-level `trivy` executable.
+CommitScope therefore extracts the exact expected root executable and rejects
+unsafe archive entries instead of expecting a one-file archive.
+
+GitHub Actions portability was checked against GitHub-hosted runner documentation
+and the `actions/setup-python` release repository. CI uses `ubuntu-24.04`,
+`ubuntu-24.04-arm`, `macos-15`, and `macos-15-intel` live-scanner runners, and
+pins `actions/setup-python` to the v7.0.0 commit while testing Python 3.11
+through 3.14.
+
+References:
+https://github.com/aquasecurity/trivy/releases/tag/v0.74.0
+https://www.trivy.dev/docs/latest/getting-started/installation/
+https://docs.github.com/en/actions/reference/runners/github-hosted-runners
+https://github.com/actions/setup-python

@@ -2,38 +2,71 @@ name: Verify review project
 on:
   push:
     branches: [main, master]
+  pull_request:
+    branches: [main, master]
   workflow_dispatch:
 permissions:
   contents: read
 jobs:
   unit:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    name: Unit/protocol (${{ matrix.os }}, Python ${{ matrix.python-version }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15]
+        python-version: ['3.11', '3.12', '3.13', '3.14']
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ matrix.python-version }}
       - name: Unit, protocol and real application behavior tests
-        run: python3 -I tests/run_tests.py
+        run: python -I tests/run_tests.py
   live-scanners:
     needs: unit
-    runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    name: Live scanners (${{ matrix.os }}, Python ${{ matrix.python-version }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            python-version: '3.14'
+            artifact-suffix: ubuntu24-x64-py314
+          - os: ubuntu-24.04-arm
+            python-version: '3.14'
+            artifact-suffix: ubuntu24-arm64-py314
+          - os: macos-15
+            python-version: '3.14'
+            artifact-suffix: macos15-arm64-py314
+          - os: macos-15-intel
+            python-version: '3.14'
+            artifact-suffix: macos15-x64-py314
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ matrix.python-version }}
       - name: Install actual pinned scanner releases
+        env:
+          PYTHON: python
         run: sh scripts/bootstrap.sh
       - name: Verify installed versions
-        run: python3 -I review.py doctor
+        run: python -I review.py doctor
       - name: Real vulnerable-to-fixed scanner acceptance
-        run: python3 -I review.py demo --out reports/demo
+        run: python -I review.py demo --out reports/demo
       - name: Preserve normalized evidence, including failed runs
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: demo-security-evidence
+          name: demo-security-evidence-${{ matrix.artifact-suffix }}
           retention-days: 7
           if-no-files-found: warn
           path: |

@@ -10,10 +10,21 @@ Put this project at the root of a separate private repository. Protect its defau
 branch and require review for scanner rules, lock files, workflow definitions, prompts,
 and runner code. The subject application must not control the trusted reviewer.
 
-`verify.yml` runs the project's tests and then installs real scanners and runs the
-real acceptance demo. It triggers on pushes to main/master and by manual dispatch.
-For a differently named default branch, update the trigger list. A failed installer
-or demonstration is a failed job, not a skipped security requirement.
+`verify.yml` has two required layers:
+
+- `unit`: unit, protocol, and application-fixture tests on Ubuntu and macOS for
+  Python 3.11, 3.12, 3.13, and 3.14.
+- `live-scanners`: real pinned scanner installation, `doctor`, and the real
+  vulnerable-to-fixed demo on Ubuntu x64, Ubuntu ARM64, macOS ARM64, and macOS
+  Intel with Python 3.14. This is the artifact-selection coverage for the four
+  supported native scanner platform keys.
+
+The runner labels are GitHub-hosted standard runners: `ubuntu-24.04`,
+`ubuntu-24.04-arm`, `macos-15`, and `macos-15-intel`.
+
+It triggers on pushes and pull requests targeting main/master, and by manual
+dispatch. For a differently named default branch, update the trigger list. A failed
+installer or demonstration is a failed job, not a skipped security requirement.
 
 `scan.yml` is manually dispatched with two required inputs: an authorized
 `owner/repository` and a full 40-character GitHub commit SHA. It validates the input,
@@ -48,9 +59,9 @@ repositories. Do not repurpose this workflow to scan arbitrary external submissi
 with privileged credentials. Review GitHub's security guidance before expanding it:
 https://docs.github.com/en/actions/reference/security/secure-use
 
-The included workflows have not been executed in a GitHub account during packaging.
-Your first successful `verify.yml` live-scanner job is an acceptance result for that
-particular environment and set of downloaded database contents, not universal certification.
+The included workflows are evidence producers, not a production certification. Your
+first successful `verify.yml` live-scanner jobs are acceptance results for those
+particular runner environments and downloaded database contents.
 
 ## Connecting to a release decision
 
@@ -61,12 +72,12 @@ security sign-off. A non-zero scanner/AI outcome must remain visible until resol
 through the team's documented triage and risk-acceptance process.
 
 
-## Claude credentials and this release
+## Optional Claude Code
 
-The provided workflows remain scanner-only. They require neither ANTHROPIC_API_KEY
-nor CLAUDE_CODE_OAUTH_TOKEN and do not read a developer's saved login.
-The local runner now supports explicit `--auth api` or `--auth subscription`; this
-change does not automatically enable AI on pushes/PRs or add secrets to workflows.
+The provided workflows remain scanner-only. They require neither `ANTHROPIC_API_KEY`
+nor `CLAUDE_CODE_OAUTH_TOKEN` and do not read a developer's saved login. Local
+CommitScope commands support explicit `--auth api` or `--auth subscription`; this
+does not automatically enable AI on pushes/PRs or add secrets to workflows.
 
 For an organization-approved future AI job, use a separately reviewed worker with
 explicit source-upload approval, protected configuration, selected credential and
@@ -74,4 +85,5 @@ private artifact handling. The official `claude setup-token` flow is documented 
 noninteractive subscription use; it is not a reason to copy a personal home/keychain
 onto a shared CI host. Review account permissions, provider terms and quotas for the
 intended workload. Never fall back from an exhausted subscription to an API key.
+CommitScope is not an official Anthropic product.
 See [Authentication](AUTHENTICATION.md).
