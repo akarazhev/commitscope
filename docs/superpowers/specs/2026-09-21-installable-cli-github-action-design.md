@@ -1,8 +1,12 @@
 # Installable CLI and GitHub Action Design
 
+> **ARCHIVED:** This design records the historical CommitScope 2.3.0 scope. For
+> current CommitScope 2.4.0 behavior, use `START-HERE.md` and
+> `docs/superpowers/specs/2026-09-22-local-corporate-review-design.md`.
+
 **Date:** 2026-09-21
 **Target release:** CommitScope 2.3.0
-**Status:** Approved design, pending implementation plan
+**Status:** Archived; superseded by the CommitScope 2.4.0 design
 
 ## Intent
 

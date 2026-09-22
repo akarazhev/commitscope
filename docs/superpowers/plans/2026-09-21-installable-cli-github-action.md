@@ -1,6 +1,8 @@
 # Installable CLI and GitHub Action Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **ARCHIVED:** This is the historical CommitScope 2.3.0 implementation plan, not
+> current operational guidance. For CommitScope 2.4.0, use `START-HERE.md` and
+> `docs/superpowers/plans/2026-09-22-local-corporate-review.md`.
 
 **Goal:** Ship CommitScope 2.3.0 as a GitHub-hosted pipx-installable CLI and a safe composite GitHub Action while preserving the source-checkout interface.
 
