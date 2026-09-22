@@ -6,6 +6,7 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from sec_review.action import parse_action_inputs, run_action, scan_argv
+from sec_review.cli import parser as cli_parser
 from sec_review.core import ReviewError
 
 
@@ -60,8 +61,19 @@ class ActionTests(unittest.TestCase):
             env = self.environment(Path(directory).resolve())
             env['INPUT_ALLOW_EMPTY_SCA'] = 'owner says $(touch /tmp/not-run); "still data"'
             argv = scan_argv(parse_action_inputs(env))
-            index = argv.index('--allow-empty-sca')
-            self.assertEqual(argv[index + 1], env['INPUT_ALLOW_EMPTY_SCA'])
+            self.assertIn(f'--allow-empty-sca={env["INPUT_ALLOW_EMPTY_SCA"]}', argv)
+            args = cli_parser().parse_args(argv)
+            self.assertEqual(args.allow_empty_sca, env['INPUT_ALLOW_EMPTY_SCA'])
+
+    def test_leading_dash_allow_empty_sca_is_cli_data(self):
+        reasons = ('--owner says no deps', '-owner says no deps', '--owner', '-owner')
+        for reason in reasons:
+            with self.subTest(reason=reason), tempfile.TemporaryDirectory() as directory:
+                env = self.environment(Path(directory).resolve())
+                env['INPUT_ALLOW_EMPTY_SCA'] = reason
+                argv = scan_argv(parse_action_inputs(env))
+                args = cli_parser().parse_args(argv)
+                self.assertEqual(args.allow_empty_sca, reason)
 
     def test_findings_status_writes_outputs_and_returns_one(self):
         with tempfile.TemporaryDirectory() as directory:

@@ -124,7 +124,7 @@ def scan_argv(inputs: ActionInputs) -> list[str]:
     if inputs.offline:
         argv.append('--offline')
     if inputs.allow_empty_sca:
-        argv += ['--allow-empty-sca', inputs.allow_empty_sca]
+        argv.append(f'--allow-empty-sca={inputs.allow_empty_sca}')
     return argv
 
 
