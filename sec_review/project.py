@@ -4,7 +4,7 @@ from pathlib import Path
 import shutil
 import uuid
 from . import __version__
-from .core import ReviewError, now, private_dir, file_hash
+from .core import ReviewError, now, private_dir, file_hash, no_symlinks
 from .paths import current_resource_root, current_tools_root
 from .snapshot import export_snapshot
 from .tools import inspect_tools, tool_paths, lock
@@ -16,6 +16,8 @@ def run_scan(repo: Path, out: Path, *, ref: str='HEAD', base: str | None=None,
              tools_root: Path | None = None, resources: Path | None = None, timeout: int=360, offline: bool=False,
              allow_empty_sca: str='', fail_on: str='high') -> dict:
     repo=repo.resolve(); out=out.absolute()
+    no_symlinks(out)
+    out=out.resolve(strict=False)
     tools_root = tools_root or current_tools_root()
     resources = resources or current_resource_root()
     if out==repo or repo in out.parents:

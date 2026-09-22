@@ -1,7 +1,7 @@
 # Installable CLI and GitHub Action Design
 
-**Date:** 2026-09-21  
-**Target release:** CommitScope 2.3.0  
+**Date:** 2026-09-21
+**Target release:** CommitScope 2.3.0
 **Status:** Approved design, pending implementation plan
 
 ## Intent

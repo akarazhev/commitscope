@@ -43,6 +43,17 @@ class AcceptanceTests(unittest.TestCase):
             'report.sarif',
         ):
             self.assertIn(expected, workflow)
+    def test_ci_docs_list_all_required_verify_checks(self):
+        ci = (ROOT / 'docs/CI.md').read_text()
+        self.assertNotIn('two required layers', ci)
+        for expected in (
+            'Unit/protocol (${{ matrix.os }}, Python ${{ matrix.python-version }})',
+            'Package install (${{ matrix.os }}, Python ${{ matrix.python-version }})',
+            'Consumer action (ubuntu-24.04, Python 3.14)',
+            'Live scanners (${{ matrix.os }}, Python ${{ matrix.python-version }})',
+        ):
+            self.assertIn(expected, ci)
+        self.assertIn('new v2.3 gates', ci)
     def test_report_driver_uses_public_brand(self):
         from sec_review.reports import sarif
         r={'findings':[]}

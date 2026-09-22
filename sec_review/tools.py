@@ -226,7 +226,7 @@ def bootstrap(root: Path | None = None) -> dict:
     key = prerequisites['platform']
     private_dir(root); marker=root/'.bootstrap-lock'
     try: marker.mkdir()
-    except FileExistsError as e: raise ReviewError('Another bootstrap may be running. Inspect .tools/.bootstrap-lock before removing a stale lock.') from e
+    except FileExistsError as e: raise ReviewError(f'Another bootstrap may be running. Inspect bootstrap lock at {marker} before removing a stale lock.') from e
     try:
         spec=lock(resources); downloads=private_dir(root/'downloads'); binaries=private_dir(root/'bin'); home=private_dir(root/'install-home')
         env=child_env(home,network=True)
@@ -240,7 +240,7 @@ def bootstrap(root: Path | None = None) -> dict:
                 result=execute([str(vpath/'bin/python'),'-I','-m','pip','--isolated','install','--disable-pip-version-check',
                                 '--no-input','--prefer-binary','--index-url','https://pypi.org/simple',str(archive)],resources,env,900)
                 write_text(root/'semgrep-install.log',result.stdout+'\n'+result.stderr)
-                if result.code!=0 or result.truncated: raise ReviewError('Semgrep dependency installation failed; see .tools/semgrep-install.log')
+                if result.code!=0 or result.truncated: raise ReviewError(f'Semgrep dependency installation failed; see {root / "semgrep-install.log"}')
         checks=inspect_tools(root,resources=resources)
         if not all(v['ok'] for v in checks.values()): raise ReviewError('Installed binary version check failed: '+str(checks))
         freeze=execute([str(root/'semgrep-env/bin/python'),'-I','-m','pip','freeze','--all'],resources,env,60)
@@ -248,6 +248,6 @@ def bootstrap(root: Path | None = None) -> dict:
                  'tools':checks,'semgrep_dependency_resolution':'recorded, not fully hash-locked',
                  'pip_freeze':freeze.stdout.splitlines(),'pip_freeze_exit_code':freeze.code}
         write_json(root/'install-receipt.json',receipt)
-        print('Scanner installation and version checks completed. Run: python3 -I review.py doctor',flush=True)
+        print(f'Scanner installation and version checks completed in {root}. Run: commitscope doctor',flush=True)
         return receipt
     finally: marker.rmdir()

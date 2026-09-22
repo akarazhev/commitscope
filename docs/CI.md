@@ -36,14 +36,24 @@ Put this project at the root of a separate private repository. Protect its defau
 branch and require review for scanner rules, lock files, workflow definitions, prompts,
 and runner code. The subject application must not control the trusted reviewer.
 
-`verify.yml` has two required layers:
+`verify.yml` has four required checks:
 
-- `unit`: unit, protocol, and application-fixture tests on Ubuntu and macOS for
+- `Unit/protocol (${{ matrix.os }}, Python ${{ matrix.python-version }})`:
+  unit, protocol, and application-fixture tests on Ubuntu and macOS for
   Python 3.11, 3.12, 3.13, and 3.14.
-- `live-scanners`: real pinned scanner installation, `doctor`, and the real
+- `Package install (${{ matrix.os }}, Python ${{ matrix.python-version }})`:
+  builds the package, installs it into a clean environment, and exercises the
+  installed `commitscope` CLI.
+- `Consumer action (ubuntu-24.04, Python 3.14)`: runs the composite action from
+  the repository checkout and verifies the consumer-facing report outputs.
+- `Live scanners (${{ matrix.os }}, Python ${{ matrix.python-version }})`:
+  runs real pinned scanner installation, `doctor`, and the real
   vulnerable-to-fixed demo on Ubuntu x64, Ubuntu ARM64, macOS ARM64, and macOS
   Intel with Python 3.14. This is the artifact-selection coverage for the four
   supported native scanner platform keys.
+
+The package-install and consumer-action checks are new v2.3 gates for the
+installable CLI and reusable GitHub Action release paths.
 
 The runner labels are GitHub-hosted standard runners: `ubuntu-24.04`,
 `ubuntu-24.04-arm`, `macos-15`, and `macos-15-intel`.

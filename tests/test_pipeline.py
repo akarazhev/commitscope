@@ -182,6 +182,14 @@ class PipelineProtocolTests(unittest.TestCase):
         from sec_review.project import run_scan
         from sec_review.core import ReviewError
         with self.assertRaises(ReviewError): run_scan(self.repo,self.repo/'out',tools_root=self.tools)
+    def test_report_directory_dotdot_resolving_inside_subject_is_rejected_before_creation(self):
+        from sec_review.project import run_scan
+        from sec_review.core import ReviewError
+        out=(self.root/'sibling'/'..'/'repo'/'dotdot-out').absolute()
+        resolved=self.repo/'dotdot-out'
+        with self.assertRaises(ReviewError):
+            run_scan(self.repo,out,tools_root=self.tools)
+        self.assertFalse(resolved.exists())
     def test_existing_report_is_not_overwritten(self):
         from sec_review.project import run_scan
         from sec_review.core import ReviewError
