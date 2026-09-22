@@ -19,6 +19,7 @@ class RuntimePathTests(unittest.TestCase):
             'config/claude-settings.json', 'config/claude.version',
             'config/empty-mcp.json', 'config/sdist-manifest.json',
             'prompts/hunter.md', 'examples/vulnerable/app.py',
+            'scripts/ai_acceptance.py', 'tests/test_ai_acceptance.py',
             'tests/test_demo_app.py',
         )
         for relative in resources:

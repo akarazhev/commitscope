@@ -67,6 +67,24 @@ version = {attr = "sec_review.__version__"}
 "share/commitscope/examples" = [
   "examples/review-policy.json",
 ]
+"share/commitscope/examples/ai-acceptance/eval/fixed" = [
+  "examples/ai-acceptance/eval/fixed/app.py",
+]
+"share/commitscope/examples/ai-acceptance/eval/vulnerable" = [
+  "examples/ai-acceptance/eval/vulnerable/app.py",
+]
+"share/commitscope/examples/ai-acceptance/idor/fixed" = [
+  "examples/ai-acceptance/idor/fixed/app.py",
+]
+"share/commitscope/examples/ai-acceptance/idor/vulnerable" = [
+  "examples/ai-acceptance/idor/vulnerable/app.py",
+]
+"share/commitscope/examples/ai-acceptance/shell/fixed" = [
+  "examples/ai-acceptance/shell/fixed/app.py",
+]
+"share/commitscope/examples/ai-acceptance/shell/vulnerable" = [
+  "examples/ai-acceptance/shell/vulnerable/app.py",
+]
 "share/commitscope/examples/fixed" = [
   "examples/fixed/Dockerfile",
   "examples/fixed/app.py",
@@ -78,6 +96,10 @@ version = {attr = "sec_review.__version__"}
   "examples/vulnerable/credentials.txt",
   "examples/vulnerable/requirements.txt",
 ]
+"share/commitscope/scripts" = [
+  "scripts/ai_acceptance.py",
+]
 "share/commitscope/tests" = [
+  "tests/test_ai_acceptance.py",
   "tests/test_demo_app.py",
 ]

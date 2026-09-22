@@ -8,7 +8,11 @@ from .core import ReviewError, file_hash, no_symlinks, read_json, safe_path
 
 RESOURCE_MANIFEST = "config/resource-manifest.json"
 RESOURCE_DIRS = ("config", "prompts", "examples")
-RESOURCE_SINGLE_FILES = ("tests/test_demo_app.py",)
+RESOURCE_SINGLE_FILES = (
+    "scripts/ai_acceptance.py",
+    "tests/test_ai_acceptance.py",
+    "tests/test_demo_app.py",
+)
 
 
 def load_resource_manifest(root: Path) -> dict[str, str]:

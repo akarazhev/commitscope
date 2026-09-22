@@ -8,7 +8,7 @@ import unittest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from sec_review.core import ReviewError
-from sec_review.resources import load_resource_manifest, validate_resource_root
+from sec_review.resources import RESOURCE_SINGLE_FILES, load_resource_manifest, validate_resource_root
 
 
 RESOURCE_FILES = (
@@ -21,6 +21,8 @@ RESOURCE_FILES = (
     "config/claude.version",
     "config/empty-mcp.json",
     "config/sdist-manifest.json",
+    "scripts/ai_acceptance.py",
+    "tests/test_ai_acceptance.py",
 )
 
 
@@ -42,6 +44,10 @@ def write_resource_root(root: Path) -> Path:
 
 
 class ResourceManifestTests(unittest.TestCase):
+    def test_acceptance_harness_and_test_are_trusted_single_file_resources(self):
+        self.assertIn("scripts/ai_acceptance.py", RESOURCE_SINGLE_FILES)
+        self.assertIn("tests/test_ai_acceptance.py", RESOURCE_SINGLE_FILES)
+
     def test_complete_resource_root_is_returned(self):
         with tempfile.TemporaryDirectory() as directory:
             root = write_resource_root(Path(directory).resolve())

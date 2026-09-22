@@ -8,6 +8,35 @@ import unittest
 from unittest.mock import patch
 from sec_review.core import ProcessResult, ReviewError, ROOT
 
+
+class ReleaseWorkflowContractTests(unittest.TestCase):
+    def test_ci_preserves_platform_matrices_and_has_offline_release_gates(self):
+        workflow = (ROOT / '.github/workflows/verify.yml').read_text()
+        for expected in (
+            "os: [ubuntu-24.04, macos-15]",
+            "python-version: ['3.11', '3.12', '3.13', '3.14']",
+            "os: ubuntu-24.04",
+            "os: ubuntu-24.04-arm",
+            "os: macos-15",
+            "os: macos-15-intel",
+            "SOURCE_DATE_EPOCH",
+            "Deterministic wheel and source distribution",
+            "Source-mode smoke test",
+            "Install wheel into clean venv",
+            "Install sdist into clean venv",
+            "Exact-commit Git install",
+            "git rev-parse HEAD",
+        ):
+            self.assertIn(expected, workflow)
+        for forbidden in (
+            "ANTHROPIC_API_KEY",
+            "CLAUDE_CODE_OAUTH_TOKEN",
+            "scripts/ai_acceptance.py",
+            "--allow-code-upload",
+            "@v2.4.0",
+        ):
+            self.assertNotIn(forbidden, workflow)
+
 class InstallationAcceptanceTests(unittest.TestCase):
     def setUp(self):
         self.tmp=tempfile.TemporaryDirectory();self.addCleanup(self.tmp.cleanup)

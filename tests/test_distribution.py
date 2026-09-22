@@ -27,8 +27,8 @@ class DistributionTests(unittest.TestCase):
     def project_metadata(self):
         return tomllib.loads((ROOT / "pyproject.toml").read_text())
 
-    def test_release_version_is_2_3_0(self):
-        self.assertEqual(__version__, "2.3.0")
+    def test_release_version_is_2_4_0(self):
+        self.assertEqual(__version__, "2.4.0")
 
     def test_project_metadata_and_console_entrypoint(self):
         metadata = self.project_metadata()
@@ -95,7 +95,29 @@ class DistributionTests(unittest.TestCase):
                 for resource in tracked_runtime_resources()
                 if resource.startswith("examples/vulnerable/")
             },
-            "share/commitscope/tests": {"tests/test_demo_app.py"},
+            "share/commitscope/examples/ai-acceptance/idor/vulnerable": {
+                "examples/ai-acceptance/idor/vulnerable/app.py"
+            },
+            "share/commitscope/examples/ai-acceptance/idor/fixed": {
+                "examples/ai-acceptance/idor/fixed/app.py"
+            },
+            "share/commitscope/examples/ai-acceptance/eval/vulnerable": {
+                "examples/ai-acceptance/eval/vulnerable/app.py"
+            },
+            "share/commitscope/examples/ai-acceptance/eval/fixed": {
+                "examples/ai-acceptance/eval/fixed/app.py"
+            },
+            "share/commitscope/examples/ai-acceptance/shell/vulnerable": {
+                "examples/ai-acceptance/shell/vulnerable/app.py"
+            },
+            "share/commitscope/examples/ai-acceptance/shell/fixed": {
+                "examples/ai-acceptance/shell/fixed/app.py"
+            },
+            "share/commitscope/scripts": {"scripts/ai_acceptance.py"},
+            "share/commitscope/tests": {
+                "tests/test_ai_acceptance.py",
+                "tests/test_demo_app.py",
+            },
         }
 
         self.assertEqual(data_files, expected_destinations)
@@ -108,8 +130,8 @@ class DistributionTests(unittest.TestCase):
             wheel = dist / sec_review_build.build_wheel(str(dist))
             sdist = dist / sec_review_build.build_sdist(str(dist))
 
-            self.assertEqual(wheel.name, "commitscope-2.3.0-py3-none-any.whl")
-            self.assertEqual(sdist.name, "commitscope-2.3.0.tar.gz")
+            self.assertEqual(wheel.name, "commitscope-2.4.0-py3-none-any.whl")
+            self.assertEqual(sdist.name, "commitscope-2.4.0.tar.gz")
             self.assertTrue(wheel.is_file())
             self.assertTrue(sdist.is_file())
 
@@ -117,17 +139,28 @@ class DistributionTests(unittest.TestCase):
                 wheel_entries = set(archive.namelist())
             self.assertIn("sec_review/cli.py", wheel_entries)
             self.assertIn(
-                "commitscope-2.3.0.data/data/share/commitscope/config/tools.lock.json",
+                "commitscope-2.4.0.data/data/share/commitscope/config/tools.lock.json",
                 wheel_entries,
             )
-            self.assertIn("commitscope-2.3.0.dist-info/RECORD", wheel_entries)
+            self.assertIn("commitscope-2.4.0.dist-info/RECORD", wheel_entries)
             self.assertFalse(any("/.tools/" in entry or "/.runs/" in entry for entry in wheel_entries))
 
             with tarfile.open(sdist, "r:gz") as archive:
                 sdist_entries = set(archive.getnames())
-            self.assertIn("commitscope-2.3.0/pyproject.toml", sdist_entries)
-            self.assertIn("commitscope-2.3.0/sec_review_build.py", sdist_entries)
-            self.assertIn("commitscope-2.3.0/config/tools.lock.json", sdist_entries)
+            self.assertIn("commitscope-2.4.0/pyproject.toml", sdist_entries)
+            self.assertIn("commitscope-2.4.0/sec_review_build.py", sdist_entries)
+            self.assertIn("commitscope-2.4.0/config/tools.lock.json", sdist_entries)
+            for relative in (
+                "examples/ai-acceptance/idor/vulnerable/app.py",
+                "examples/ai-acceptance/idor/fixed/app.py",
+                "examples/ai-acceptance/eval/vulnerable/app.py",
+                "examples/ai-acceptance/eval/fixed/app.py",
+                "examples/ai-acceptance/shell/vulnerable/app.py",
+                "examples/ai-acceptance/shell/fixed/app.py",
+                "scripts/ai_acceptance.py",
+                "tests/test_ai_acceptance.py",
+            ):
+                self.assertIn("commitscope-2.4.0/" + relative, sdist_entries)
             blocked = (
                 "/.git/",
                 "/.idea/",
@@ -264,8 +297,8 @@ class DistributionTests(unittest.TestCase):
                 stdout=subprocess.PIPE,
                 text=True,
             )
-            self.assertEqual(cli.stdout.strip(), "2.3.0")
-            self.assertEqual(module.stdout.strip(), "2.3.0")
+            self.assertEqual(cli.stdout.strip(), "2.4.0")
+            self.assertEqual(module.stdout.strip(), "2.4.0")
 
     def test_sdist_no_git_fallback_uses_exact_manifest_and_rejects_allowlisted_symlink(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -288,7 +321,7 @@ class DistributionTests(unittest.TestCase):
                 "import sec_review_build; "
                 "path = Path('dist') / sec_review_build.build_sdist('dist'); "
                 "entries = tarfile.open(path, 'r:gz').getnames(); "
-                "prefix = 'commitscope-2.3.0/'; "
+                "prefix = 'commitscope-2.4.0/'; "
                 "declared = json.loads(Path('config/sdist-manifest.json').read_text())['files']; "
                 "assert all(entries.count(prefix + item) == 1 for item in declared); "
                 "assert not any(prefix + item in entries for item in " + repr(forbidden) + ")"

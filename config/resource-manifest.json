@@ -43,7 +43,7 @@
     },
     {
       "path": "config/sdist-manifest.json",
-      "sha256": "a82d365b935526a04dff85705081f3db21de3c7e951086195047d7758011c5b3"
+      "sha256": "e6bfa7c793f34d1ffba731de7a41c43452cc9b0b19e45586271bafdf02f887df"
     },
     {
       "path": "config/semgrep.yaml",
@@ -60,6 +60,30 @@
     {
       "path": "config/verifier.schema.json",
       "sha256": "cc6cc86f758de660fdc60b5ef509f3a77d6f3ad37f61c5739ebabbeb99820a86"
+    },
+    {
+      "path": "examples/ai-acceptance/eval/fixed/app.py",
+      "sha256": "8146933386743bccf4adfa0489b9623fcb267b07e98f17a664c8d53d7bd38a43"
+    },
+    {
+      "path": "examples/ai-acceptance/eval/vulnerable/app.py",
+      "sha256": "0b43cbed863091adc5a39d830aaced8a953ed1820247e15f6df3effbda86934c"
+    },
+    {
+      "path": "examples/ai-acceptance/idor/fixed/app.py",
+      "sha256": "87491f6e215f6d947bd5d6bbfbcb9f733b51af857a16a4657dfe64a40a57bf58"
+    },
+    {
+      "path": "examples/ai-acceptance/idor/vulnerable/app.py",
+      "sha256": "4c5f48f88b691f7bdbcbe1ae2d2703f7a0738c40f27c471280d8141f10c202a7"
+    },
+    {
+      "path": "examples/ai-acceptance/shell/fixed/app.py",
+      "sha256": "8a126e263c1ac39017dc42daa25137d5520e85c0f0366493f6adfa2674880f3e"
+    },
+    {
+      "path": "examples/ai-acceptance/shell/vulnerable/app.py",
+      "sha256": "92193620a422f378dea95d0a542550fd3db05001bd8a69b1926276c9ed25648e"
     },
     {
       "path": "examples/fixed/Dockerfile",
@@ -108,6 +132,14 @@
     {
       "path": "prompts/verifier.md",
       "sha256": "71a195e1235d86c2c0234f1c2d1c91d505a551b85f9642f9f5aad96b75d805e0"
+    },
+    {
+      "path": "scripts/ai_acceptance.py",
+      "sha256": "41b8bb753dbc41494d1ddeb59625e24c22dbfbeadcaa95270d589ca690a3a640"
+    },
+    {
+      "path": "tests/test_ai_acceptance.py",
+      "sha256": "775392c61ae7d2d9775389187ab063cefb3beb5627dfd51e9a63c6b1a5129439"
     },
     {
       "path": "tests/test_demo_app.py",
