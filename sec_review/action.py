@@ -8,7 +8,8 @@ import uuid
 
 from . import __version__
 from .cli import main
-from .core import ReviewError, no_symlinks, now, private_dir
+from .core import (ReviewError, active_output_claim, claim_output_dir, mark_output_claim,
+                   no_symlinks, now, output_claim_is_current, verify_output_claim)
 from .reports import save_reports
 
 
@@ -143,17 +144,18 @@ def scan_argv(inputs: ActionInputs) -> list[str]:
     return argv
 
 
-def _current_reports(inputs: ActionInputs) -> bool:
+def _current_reports(inputs: ActionInputs, claim) -> bool:
     reports = tuple(inputs.out / name for name in ('report.json', 'report.md', 'report.sarif'))
-    return inputs.out.is_dir() and not inputs.out.is_symlink() and all(
+    return output_claim_is_current(claim) and inputs.out.is_dir() and not inputs.out.is_symlink() and all(
         report.parent == inputs.out and report.is_file() and not report.is_symlink()
         for report in reports
     )
 
 
-def write_action_outputs(path: Path, inputs: ActionInputs, code: int, *, reports_ready: bool = True) -> None:
+def write_action_outputs(path: Path, inputs: ActionInputs, code: int, *, claim=None,
+                         reports_ready: bool = True) -> None:
     records: dict[str, Path | int] = {'exit-code': code}
-    if reports_ready and _current_reports(inputs):
+    if reports_ready and claim is not None and _current_reports(inputs, claim):
         records = {
             'report-directory': inputs.out,
             'report-json': inputs.out / 'report.json',
@@ -167,9 +169,9 @@ def write_action_outputs(path: Path, inputs: ActionInputs, code: int, *, reports
             output.write(f'{key}={value}\n')
 
 
-def save_bootstrap_failure_report(inputs: ActionInputs) -> None:
+def save_bootstrap_failure_report(inputs: ActionInputs, claim) -> None:
     reason = 'GitHub Action scanner bootstrap failed before scan; no target source snapshot was exported.'
-    private_dir(inputs.out, new=True)
+    verify_output_claim(claim)
     report = {
         'schema_version': '2.0',
         'project_version': __version__,
@@ -195,6 +197,7 @@ def save_bootstrap_failure_report(inputs: ActionInputs) -> None:
         'error': reason,
     }
     save_reports(inputs.out, report)
+    mark_output_claim(inputs.out)
 
 
 def run_action(environ: Mapping[str, str], cli_main: Callable[[list[str]], int] = main) -> int:
@@ -202,23 +205,26 @@ def run_action(environ: Mapping[str, str], cli_main: Callable[[list[str]], int] 
         inputs = parse_action_inputs(environ)
     except (ReviewError, OSError, ValueError, KeyError, TypeError):
         return 2
-    if inputs.out.exists():
+    try:
+        claim = claim_output_dir(inputs.out)
+    except (ReviewError, OSError, ValueError, KeyError, TypeError):
         try:
             write_action_outputs(inputs.github_output, inputs, 2, reports_ready=False)
         except (ReviewError, OSError, ValueError, KeyError, TypeError):
             pass
         return 2
-    if cli_main(['bootstrap']) != 0:
-        try:
-            save_bootstrap_failure_report(inputs)
-            write_action_outputs(inputs.github_output, inputs, 2)
-        except (ReviewError, OSError, ValueError, KeyError, TypeError):
-            pass
-        return 2
-    code = cli_main(scan_argv(inputs))
+    with active_output_claim(claim):
+        if cli_main(['bootstrap']) != 0:
+            try:
+                save_bootstrap_failure_report(inputs, claim)
+                write_action_outputs(inputs.github_output, inputs, 2, claim=claim)
+            except (ReviewError, OSError, ValueError, KeyError, TypeError):
+                pass
+            return 2
+        code = cli_main(scan_argv(inputs))
     if code not in (0, 1, 2):
         code = 2
-    if not _current_reports(inputs):
+    if not _current_reports(inputs, claim):
         code = 2
-    write_action_outputs(inputs.github_output, inputs, code)
+    write_action_outputs(inputs.github_output, inputs, code, claim=claim)
     return code

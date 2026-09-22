@@ -10,7 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from sec_review.action import parse_action_inputs, run_action, scan_argv
 from sec_review.cli import parser as cli_parser
-from sec_review.core import ReviewError
+from sec_review.core import ReviewError, mark_output_claim
 
 
 class ActionTests(unittest.TestCase):
@@ -48,6 +48,7 @@ class ActionTests(unittest.TestCase):
                 out.mkdir(exist_ok=True)
                 for name in ('report.json', 'report.md', 'report.sarif'):
                     (out / name).write_text(name)
+                mark_output_claim(out)
                 created.append(out)
                 return 0
 
@@ -76,6 +77,26 @@ class ActionTests(unittest.TestCase):
                     '00000000-0000-0000-0000-000000000002')):
                 self.assertEqual(run_action(env, lambda argv: 0), 2)
 
+            self.assertEqual(Path(env['GITHUB_OUTPUT']).read_text(), 'exit-code=2\n')
+
+    def test_racing_stale_reports_are_never_published(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            env = self.environment(base)
+
+            def fake_main(argv):
+                if argv == ['bootstrap']:
+                    return 0
+                out = Path(argv[argv.index('--out') + 1])
+                try:
+                    out.mkdir()
+                except FileExistsError:
+                    return 2
+                for name in ('report.json', 'report.md', 'report.sarif'):
+                    (out / name).write_text('stale PASS')
+                return 2
+
+            self.assertEqual(run_action(env, fake_main), 2)
             self.assertEqual(Path(env['GITHUB_OUTPUT']).read_text(), 'exit-code=2\n')
 
     def test_existing_explicit_output_is_rejected(self):
@@ -153,6 +174,7 @@ class ActionTests(unittest.TestCase):
                 out.mkdir(exist_ok=True)
                 for name in ('report.json', 'report.md', 'report.sarif'):
                     (out / name).write_text(name)
+                mark_output_claim(out)
                 return 1
             self.assertEqual(run_action(env, fake_main), 1)
             output = Path(env['GITHUB_OUTPUT']).read_text()
@@ -238,6 +260,7 @@ class ActionTests(unittest.TestCase):
                 alternate.mkdir()
                 for name in ('report.json', 'report.md', 'report.sarif'):
                     (alternate / name).write_text(name)
+                out.rmdir()
                 out.symlink_to(alternate, target_is_directory=True)
                 return 0
 

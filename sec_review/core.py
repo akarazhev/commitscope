@@ -1,5 +1,7 @@
 """Small, dependency-free primitives. Target content is never executed here."""
 from __future__ import annotations
+from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass
 from datetime import datetime, timezone
 import hashlib
@@ -7,6 +9,7 @@ import json
 import os
 from pathlib import Path, PurePosixPath
 import signal
+import stat
 import subprocess
 import tempfile
 import time
@@ -16,6 +19,17 @@ ROOT = Path(__file__).resolve().parents[1]
 MAX_OUTPUT = 32 * 1024 * 1024
 class ReviewError(Exception):
     """A failed prerequisite or incomplete review, not a clean result."""
+
+
+@dataclass
+class OutputClaim:
+    path: Path
+    device: int
+    inode: int
+    reports_written: bool = False
+
+
+_ACTIVE_OUTPUT_CLAIM: ContextVar[OutputClaim | None] = ContextVar('active_output_claim', default=None)
 
 def now() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -71,6 +85,53 @@ def private_dir(path: Path, *, new: bool=False) -> Path:
     path.mkdir(parents=True, exist_ok=not new, mode=0o700)
     path.chmod(0o700)
     return path
+
+
+def claim_output_dir(path: Path) -> OutputClaim:
+    private_dir(path, new=True)
+    state = path.stat(follow_symlinks=False)
+    claim = OutputClaim(path, state.st_dev, state.st_ino)
+    verify_output_claim(claim)
+    return claim
+
+
+@contextmanager
+def active_output_claim(claim: OutputClaim):
+    token = _ACTIVE_OUTPUT_CLAIM.set(claim)
+    try:
+        yield
+    finally:
+        _ACTIVE_OUTPUT_CLAIM.reset(token)
+
+
+def output_claim_for(path: Path) -> OutputClaim | None:
+    claim = _ACTIVE_OUTPUT_CLAIM.get()
+    return claim if claim is not None and claim.path == path else None
+
+
+def verify_output_claim(claim: OutputClaim) -> None:
+    no_symlinks(claim.path)
+    state = claim.path.stat(follow_symlinks=False)
+    if not stat.S_ISDIR(state.st_mode) or (state.st_dev, state.st_ino) != (claim.device, claim.inode):
+        raise ReviewError(f'Action output directory ownership changed: {claim.path}')
+
+
+def mark_output_claim(path: Path) -> None:
+    claim = output_claim_for(path)
+    if claim is None:
+        raise ReviewError(f'No active output claim for reports: {path}')
+    verify_output_claim(claim)
+    claim.reports_written = True
+
+
+def output_claim_is_current(claim: OutputClaim) -> bool:
+    if not claim.reports_written:
+        return False
+    try:
+        verify_output_claim(claim)
+    except (ReviewError, OSError):
+        return False
+    return True
 
 def write_text(path: Path, text: str) -> None:
     no_symlinks(path)
