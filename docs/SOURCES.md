@@ -1,92 +1,67 @@
-# Primary sources and version verification
+# Primary Sources And Version Verification
 
-Scanner references reviewed on **2026-09-18**; Claude auth/CLI references rechecked on **2026-09-19**. These sources informed CLI construction and the tool lock.
-Reading upstream documentation is not equivalent to executing the tools successfully.
-The version pins are deliberate release selections, not a promise always to be latest.
+Upstream documentation records assumptions; it does not prove that a local tool,
+credential, scanner database, model request, or hosted workflow succeeded. Version
+pins are deliberate reviewed selections, not a promise to always track the latest.
 
-| Component | Primary reference | Use in this project |
+## Claude Code Recheck - 2026-09-22
+
+The following official Claude Code pages were rechecked on **2026-09-22**:
+
+| Official reference | Project use |
+|---|---|
+| https://code.claude.com/docs/en/cli-reference | `claude auth login`, machine-readable auth status, print mode, explicit `--model`, JSON schema output, turn limits, and session restrictions. |
+| https://code.claude.com/docs/en/authentication | First-party claude.ai account login, supported account types, credential precedence, and the risk that an ambient API key can supersede a saved login. |
+| https://code.claude.com/docs/en/model-config | Model aliases can change resolution; a full model name is the documented pinning mechanism. |
+| https://code.claude.com/docs/en/headless | Noninteractive `-p`, JSON output, `--json-schema`, structured-output fields, and programmatic failure behavior. |
+
+Those pages support the adapter shape but not every CommitScope policy choice.
+CommitScope deliberately requires saved first-party account auth, rejects ambient
+credential/provider/model overrides, requires an exact full model ID, disables tools
+and persistence, and treats every failed or malformed call as `INCOMPLETE` without
+fallback. Account entitlement, quota, exact model availability, and organization
+policy must still be verified on the deployment host.
+
+Additional official Claude references:
+
+- Setup and supported hosts: https://code.claude.com/docs/en/setup
+- Settings and managed policy: https://code.claude.com/docs/en/settings
+
+## Scanner Sources
+
+Scanner release and CLI references were reviewed on **2026-09-18** and retained for
+the pinned tool lock:
+
+| Component | Primary reference | Use |
 |---|---|---|
-| Semgrep release | https://github.com/semgrep/semgrep/releases/tag/v1.177.0 | Selected version. |
-| Semgrep wheel metadata | https://pypi.org/pypi/semgrep/1.177.0/json | Exact platform wheels, hashes, Python compatibility. |
-| Semgrep CLI | https://semgrep.dev/docs/cli-reference | scan, local config, JSON, strict errors, metrics, suppression flags. |
-| Gitleaks release | https://github.com/gitleaks/gitleaks/releases/tag/v8.30.1 | Platform artifacts and checksum data. |
-| Gitleaks CLI | https://github.com/gitleaks/gitleaks | Directory mode, redaction, exit code, explicit config/ignore handling. |
-| Trivy release assets | https://github.com/aquasecurity/trivy/releases/expanded_assets/v0.74.0 | Platform artifacts and SHA256 digests. |
-| Trivy filesystem CLI | https://trivy.dev/docs/latest/references/configuration/cli/trivy_filesystem/ | SCA/IaC scanners, inventory, database and network flags. |
-| Trivy v0.74.0 report source | https://github.com/aquasecurity/trivy/blob/v0.74.0/pkg/types/report.go | JSON report fields and schema structure. |
-| Claude Code setup | https://code.claude.com/docs/en/setup | Installation and platform prerequisites. |
-| Claude Code authentication | https://code.claude.com/docs/en/authentication | Saved login, official setup-token flow, credential precedence. |
-| Claude subscription usage | https://support.claude.com/en/articles/11145838-use-claude-code-with-your-pro-or-max-plan | Plan prerequisites, subscription/API distinction and limits. |
-| Claude managed policy | https://code.claude.com/docs/en/settings | Policy remains authoritative; safe mode is not an OS sandbox. |
-| Claude Code CLI | https://code.claude.com/docs/en/cli-reference | Noninteractive flags, safe mode versus bare mode, auth status and limits. |
-| Claude Code programmatic usage | https://code.claude.com/docs/en/headless | Bare-mode authentication, input, structured output and failure handling. |
-| GitHub secure workflows | https://docs.github.com/en/actions/reference/security/secure-use | Workflow trust and token boundaries. |
-| Checkout action commit | https://github.com/actions/checkout/commit/11bd71901bbe5b1630ceea73d27597364c9af683 | Fixed action source revision. |
-| Upload-artifact action commit | https://github.com/actions/upload-artifact/commit/ea165f8d65b6e75b540449e92b4886f43607fa02 | Fixed action source revision. |
+| Semgrep 1.177.0 | https://github.com/semgrep/semgrep/releases/tag/v1.177.0 | Selected release. |
+| Semgrep wheel metadata | https://pypi.org/pypi/semgrep/1.177.0/json | Platform/Python artifacts and hashes. |
+| Semgrep CLI | https://semgrep.dev/docs/cli-reference | Local config, JSON, strict errors, metrics, and suppression controls. |
+| Gitleaks 8.30.1 | https://github.com/gitleaks/gitleaks/releases/tag/v8.30.1 | Release artifacts and checksums. |
+| Gitleaks CLI | https://github.com/gitleaks/gitleaks | Directory scan, redaction, exit code, and ignore controls. |
+| Trivy 0.74.0 | https://github.com/aquasecurity/trivy/releases/tag/v0.74.0 | Release artifacts and checksums. |
+| Trivy filesystem CLI | https://trivy.dev/docs/latest/references/configuration/cli/trivy_filesystem/ | Vulnerability, IaC, inventory, database, and network flags. |
+| Trivy report source | https://github.com/aquasecurity/trivy/blob/v0.74.0/pkg/types/report.go | Pinned JSON report structure. |
 
-Scanner rules in `config/semgrep.yaml` and the demo secret pattern are original,
-minimal teaching/baseline rules for this project. They are not a redistributed complete
-community or commercial rule pack. The methodology is project guidance, not an official
-Anthropic product, accreditation, or endorsement.
+Top-level hashes do not authenticate a compromised publisher or fully lock Semgrep's
+transitive dependencies. Scanner rules in `config/semgrep.yaml` and the demo secret
+pattern are original minimal project baselines, not a complete community/commercial
+ruleset.
 
-## Clean-start recheck — 2026-09-20
+## GitHub Workflow Sources
 
-Official setup and CLI documentation was rechecked for native installation, exact
-version selection, native launcher location, safe mode and bare-mode authentication:
-https://code.claude.com/docs/en/setup
-https://code.claude.com/docs/en/cli-reference
-https://code.claude.com/docs/en/authentication
-https://raw.githubusercontent.com/anthropics/claude-code/main/CHANGELOG.md
+- Secure workflow guidance: https://docs.github.com/en/actions/reference/security/secure-use
+- `actions/checkout` reviewed commit: `11bd71901bbe5b1630ceea73d27597364c9af683`
+- `actions/setup-python` reviewed commit: `5fda3b95a4ea91299a34e894583c3862153e4b97`
+- `actions/upload-artifact` reviewed commit: `ea165f8d65b6e75b540449e92b4886f43607fa02`
+- `github/codeql-action/upload-sarif` reviewed commit:
+  `3ea06614dafe36dec890db3446326e0d40ce53d4`
 
-`config/claude.version` selects the published 2.1.278 CLI for the optional installer.
-This selection is not a claim that its binary was downloaded or executed here.
-The top-level native installer is fetched over verified TLS and is not hash-pinned
-by this project. The scanner asset pins remain unchanged. Review of upstream
-release metadata does not prove successful download, installation or execution.
+These pins improve source stability but are not a complete supply-chain attestation.
 
-## Scanner-ready recheck — 2026-09-21
+## Legacy Starter Kit 1.0
 
-The Trivy 0.74.0 release archive structure was checked against the official
-release asset. The pinned `.tar.gz` archives contain multiple files, including
-`LICENSE`, `README.md`, `contrib/*.tpl`, and a root-level `trivy` executable.
-CommitScope therefore extracts the exact expected root executable and rejects
-unsafe archive entries instead of expecting a one-file archive.
-
-GitHub Actions portability was checked against GitHub-hosted runner documentation
-and the `actions/setup-python` release repository. CI uses `ubuntu-24.04`,
-`ubuntu-24.04-arm`, `macos-15`, and `macos-15-intel` live-scanner runners, and
-pins `actions/setup-python` to the v7.0.0 commit while testing Python 3.11
-through 3.14.
-
-References:
-https://github.com/aquasecurity/trivy/releases/tag/v0.74.0
-https://www.trivy.dev/docs/latest/getting-started/installation/
-https://docs.github.com/en/actions/reference/runners/github-hosted-runners
-https://github.com/actions/setup-python
-
-## Installable CLI and action sources — 2026-09-22
-
-Package metadata is local and source-controlled. `pyproject.toml` uses
-the in-tree `sec_review_build` backend with no external build requirements,
-dynamic version metadata from `sec_review.__version__`, and the
-`sec_review.cli:main` console entry point named `commitscope`. The package
-verification workflow runs `python -I scripts/build_dist.py --dist-dir dist` to
-create the wheel and source distribution without PyPI-hosted build tooling.
-
-The composite action interface is local in `action.yml`. It runs Python 3.14 through
-the pinned official `actions/setup-python` source and exposes validated inputs for
-`repo`, `ref`, `out`, `fail-on`, `timeout`, `offline`, and `allow-empty-sca`. Its
-documented outputs are `report-directory`, `report-json`, `report-markdown`,
-`report-sarif`, and `exit-code`.
-
-Official GitHub action source references recorded in local workflow/action metadata:
-
-- `actions/checkout` at commit `11bd71901bbe5b1630ceea73d27597364c9af683`
-  (`v4.2.2`) for trusted checkout steps.
-- `actions/setup-python` at commit `5fda3b95a4ea91299a34e894583c3862153e4b97`
-  (`v7.0.0`) for package/action Python installation.
-- `actions/upload-artifact` at commit `ea165f8d65b6e75b540449e92b4886f43607fa02`
-  (`v4.6.2`) for preserving normalized evidence in project workflows.
-- `github/codeql-action/upload-sarif` at commit
-  `3ea06614dafe36dec890db3446326e0d40ce53d4` (`v3`) in the documented consumer
-  example for optional SARIF upload.
+Any Starter Kit 1.0 playbook is retained only as historical methodology. It predates
+the atomic 2.4 `commitscope review`, mandatory Hunter/Verifier, protected manifest,
+three corporate states, and `verify-review` handoff. It must be prominently labeled
+legacy and must not be used as active operator guidance or corporate acceptance.

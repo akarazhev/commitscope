@@ -1,128 +1,99 @@
-# CommitScope trust boundaries and limitations
+# Security Boundaries And Limitations
 
-## What is trusted
+## Trust Model
 
-The operator, CommitScope source/configuration, tool lock, downloaded upstream tools,
-Python environment, executable search PATH, local OS account, and approved subscription/API credentials
-are trusted. The target's code, comments, filenames, manifests, and model outputs are not
-instructions to change reviewer policy.
+The operator, reviewed CommitScope source and configuration, scanner lock, official
+Claude Code executable, Python environment, OS account, protected policy, credential
+store, and managed workstation policy are trusted. Target code, comments, filenames,
+manifests, scanner text, and model output are untrusted data and never instructions.
 
-Keep CommitScope in a separate protected directory/repository. Do not load its
-rules, Python modules, hooks, or tool lock from an unreviewed target PR. Launch with
-`python3 -I review.py` so Python path/environment injection is restricted; this does not
-turn Python or native scanner processes into an OS sandbox.
+Keep CommitScope in a protected directory separate from the target. It exports the
+selected committed Git blobs without checking out or building the application. It
+rejects dirty targets, symbolic links, submodules, special Git entries, oversized
+snapshots, ambiguous refs, output inside the target, and evidence overwrite.
 
-## Controls implemented
+CommitScope is not an OS sandbox. Native scanners and Claude Code run with the current
+user's filesystem and network privileges. Use a disposable, unprivileged host without
+production credentials, Docker sockets, SSH agents, or privileged mounts when the
+repository may be hostile.
 
-The runner exports Git blobs for the chosen immutable commit without checkout/build
-hooks. It avoids `git archive` export-ignore behavior, pins the snapshot content hash,
-records exclusions, rejects symbolic links/submodules/special entries, and refuses dirty
-worktrees, oversized files, output directories inside the subject, and evidence overwrite.
+## Corporate Workflow Boundary
 
-Target Semgrep ignore files are neutralized and recorded. Gitleaks allow/ignore controls
-are disabled for the invocation, and scanner configurations come from the trusted runner.
-Detected inline Trivy/tfsec suppression directives require manual inspection and produce
-an incomplete result. These controls are not a promise to recognize every present or
-future suppression mechanism in every scanner.
+`commitscope review` is the corporate path. It requires a full lowercase commit ID,
+a reviewed protected policy, a new protected output directory, explicit source-upload
+consent, account authentication, an exact full Claude model ID, all four scanner checks,
+and independent Hunter and Verifier processes. `commitscope scan` and `commitscope ai`
+remain partial diagnostic/compatibility commands and are not completed corporate
+reviews, separately or combined.
 
-Scanner subprocesses have filtered environments and private working directories. No
-shell command strings are evaluated by the runner. Timeouts terminate a process group;
-missing outputs, malformed JSON, unexpected exit codes, no SAST coverage, and unverifiable
-SCA freshness are not clean checks. Normalized Gitleaks output omits matched secret values.
+The GitHub Action is also partial. It produces normalized scanner reports without
+Claude or source upload. Those reports are inputs to the later local review; the local
+command reruns required scanners and both model stages against the exact commit.
 
-AI receives a bounded packet, has no model-callable execution tools, and cannot lower the
-scanner policy result. Its input is screened but must still be approved for transfer.
+The corporate child environment rejects ambient API credentials, alternate-provider
+routing, profile selectors, base-URL changes, fallback models, and model overrides.
+Each Claude stage rechecks the saved first-party claude.ai login. A login, quota,
+model, network, timeout, or protocol failure is `INCOMPLETE`; no API or provider
+fallback is attempted.
 
-## Installed state and GitHub Action boundaries
+## Source Transfer And Model Isolation
 
-Source checkouts store scanner state in `.tools/`. Installed CLI runs store scanner
-state under `$COMMITSCOPE_HOME/tools` when `COMMITSCOPE_HOME` is an absolute path;
-otherwise macOS uses `~/Library/Caches/CommitScope/tools`, Linux uses
-`$XDG_CACHE_HOME/commitscope/tools` when set, and Linux falls back to
-`~/.cache/commitscope/tools`. Default `.runs/` output is relative to the current
-directory, not to the installed package.
+`--allow-code-upload` is explicit operator consent. Before any model call, Gitleaks
+must complete and the reviewed policy must permit upload. The packet is limited by
+file count and UTF-8 byte budget. Credential-like filenames, private-key markers,
+Gitleaks-hit files, unsupported content, and out-of-scope files are omitted with a
+reason. This reduces exposure but is not complete secret sanitization.
 
-The consumer GitHub Action form uses:
+Hunter and Verifier run as fresh CLI processes with tools disabled, no permission
+prompts, an empty MCP configuration, no slash commands, and no session persistence.
+Managed settings, the official executable, the OS, approved proxy configuration, and
+the remote service remain trusted. The model cannot modify the repository, run a
+reproduction, remove scanner findings, or approve a merge.
 
-```yaml
-uses: akarazhev/commitscope@v2.3.0
+## Protected Evidence
+
+The output path must be outside the target and must not exist. CommitScope rejects
+symlink components and unsafe parent permissions. It creates directories with mode
+`0700` and files with mode `0600`.
+
+Normalized top-level reports and `evidence/` exclude known credential values and
+account identifiers. They may still contain confidential paths, code-derived text,
+and findings, so share them only under company policy. `private/` contains raw scanner
+output, the source packet, model envelopes, and diagnostics. Never publish, upload, or
+commit the whole run directory.
+
+`manifest.json` records the exact commit, snapshot, policy, scanner and Claude Code
+versions, exact model ID, resource hashes, stage status, timings, and artifact hashes.
+It is written last and checked by `commitscope verify-review`. It is not signed and
+does not authenticate its author or prove immutable storage. The verifier always says:
+
+```text
+Manifest authorship and immutability are not cryptographically verified; no signature is present.
 ```
 
-Tag pinning is convenient for operators but weaker than pinning a reviewed full
-commit SHA. The example workflow pins third-party actions by full SHA and can be
-adapted to pin CommitScope by full SHA as well.
+Human identity, approval, retention, access control, and tamper-resistant storage are
+external company responsibilities.
 
-The Action is scanner-only. It has no AI mode, no `--allow-code-upload` path, no
-source upload to an AI service, and no target build or target dependency install.
-SARIF upload requires `security-events: write`; fork pull requests may not receive
-that permission from GitHub, so preserve report artifacts for evidence.
+## Scanner And Analysis Limits
 
-## Authentication isolation
+- Semgrep uses a small bundled baseline, not exhaustive whole-program analysis.
+- Dependency inventory can miss unsupported or unresolved dependencies. Empty SCA is
+  incomplete unless an owner explicitly records an audited standard-library-only
+  reason with `--allow-empty-sca`.
+- Gitleaks scans the selected snapshot, not Git history. Suspected exposed credentials
+  still require incident response and rotation.
+- Trivy database freshness and scanner behavior change over time. Offline runs require
+  already present, sufficiently fresh metadata.
+- The workflow does not provide DAST, fuzzing, penetration testing, target builds,
+  target tests, exploit reproduction, or ASVS certification.
+- Bounded source and exclusions limit model conclusions. Hunter/Verifier agreement is
+  evidence, not proof, and both stages can share systematic errors.
 
-The operator must explicitly choose `--auth subscription` or `--auth api`. API mode
-uses a temporary HOME and `--bare`, forwarding only `ANTHROPIC_API_KEY` as its auth
-credential. Subscription mode uses `--safe-mode`: saved login preserves the real HOME
-and an explicitly set CLAUDE_CONFIG_DIR, while explicit OAuth-token login uses a
-private HOME and only CLAUDE_CODE_OAUTH_TOKEN. Ambient API keys, bearer tokens,
-provider flags and profile overrides are omitted from the subscription child.
-The parent environment and saved credentials are not edited by the project itself.
+## Handling Results
 
-The adapter checks local CLI status before uploading source. A credential-mode mismatch
-is a failure, not permission to switch billing paths. Local status is not proof that a
-token remains valid on the server or that a plan has remaining quota. Managed policy,
-the OS account, the CLI executable and the credential store remain trusted. Safe mode
-is not an OS sandbox; managed settings can still affect hooks/auth/network behavior.
-This project must not be used to bypass organization-mandated login restrictions.
+`READY_FOR_HUMAN_REVIEW`, `FINDINGS_REQUIRE_TRIAGE`, and `INCOMPLETE` all require a
+human response. READY_FOR_HUMAN_REVIEW does not approve a merge or assert that the application is secure.
 
-Known environment credentials are redacted before storing CLI text. Unknown secrets,
-saved credential-store values and application secrets are not guaranteed to be removed.
-The CLI can write its own diagnostics outside this project's run directory. Treat the
-host's Claude data as sensitive, especially when using saved subscription login.
-See [Authentication](AUTHENTICATION.md) for credential precedence and supported paths.
-
-## Explicit gaps
-
-- Native scanners still run with the OS account's filesystem privileges. No seccomp,
-  namespace, container, VM, egress firewall, or memory/disk quota is configured here.
-  Temporary process log files can grow until timeout. Use OS-enforced resource limits
-  and disposable workers for adversarial inputs or large workloads.
-- No exhaustive whole-program analysis, ASVS certification, DAST, fuzzing, penetration
-  testing, target build execution, or target test execution is included in `scan`.
-- SAST covers only the 13 bundled baseline rules until you extend it. Their findings
-  are candidates, not automatic proofs of exploitability.
-- Dependency analysis inventories supported files; it can miss unresolved/transitive
-  dependencies absent from those files. Trivy's no-network dependency lookup policy
-  trades completeness for reduced external interaction.
-- Secrets are scanned in the selected snapshot, not in Git history. All credentials
-  suspected of prior exposure still require normal incident response/rotation.
-- Excluded tracked directories include vendored/generated/dependency/build outputs.
-  Exclusions appear in the manifest. Original `.semgrepignore` content is hashed and
-  recorded but not inspected by scanners after neutralization.
-- Every file must be at most 5 MiB and the exported snapshot at most 250 MiB. Per-blob
-  Git subprocesses favor clarity over monorepo throughput. Unsupported repositories
-  need explicit adaptation, not a bypass disguised as completeness.
-- No authenticated approval, tamper-proof evidence service, signed attestation, or
-  immutable release gate is provided. Local reports can be edited by the operator.
-- Pinned top-level artifact hashes do not authenticate every Semgrep dependency or
-  validate a compromised upstream publisher. Transitive dependencies are not fully locked.
-- The model version is operator-selected; the default alias can change. No real-model
-  detection benchmark or prompt-injection resistance certification has been performed.
-
-## Handling findings and artifacts
-
-A secret value may exist in private raw tool output even with redaction requested.
-Model text may quote code. Treat the entire run directory as confidential, review
-normalized outputs before sharing, and do not commit `.tools/` or `.runs/`. Built-in
-workflows upload no raw/source/AI artifacts, and do not call AI.
-
-A blocked or incomplete result is resolved through human investigation and a new run,
-not by editing its JSON. Keep evidence outside the target repository and use protected
-retention/access rules in your organization's storage system.
-
-## Qualification before production gating
-
-Require actual install+demo success on each supported platform, representative scans,
-model evaluations, adversarial-input tests in an isolated worker, authenticated approval
-bound to the target SHA, measured operational limits, audited secret handling, and a
-rollback/update process. Until then, use this as an additional advisory control for
-trusted repositories, not the sole basis for shipping software.
+Preserve every original run. Resolve a failure or finding through investigation, a
+new commit where needed, and a complete new run in a new directory. Never edit report
+JSON or reuse evidence to make another commit appear reviewed.
