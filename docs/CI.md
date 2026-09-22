@@ -57,10 +57,12 @@ systems.
 After CI, the developer runs:
 
 ```bash
-commitscope review --repo /absolute/repository --ref <full-commit-id> \
+commitscope review --repo /absolute/repository --ref FULL_COMMIT_ID \
   --policy /protected/review-policy.json --out /protected/reviews/run-id \
-  --auth account --allow-code-upload --model claude-sonnet-5
+  --auth account --allow-code-upload --model APPROVED_EXACT_MODEL_ID
 ```
 
-The assigned reviewer then runs `commitscope verify-review` and performs human triage.
+Replace both uppercase placeholders with the reviewed full SHA and approved exact
+model ID. The assigned reviewer then runs `commitscope verify-review` and performs
+human triage.
 READY_FOR_HUMAN_REVIEW does not approve a merge or assert that the application is secure.

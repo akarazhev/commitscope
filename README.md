@@ -51,15 +51,15 @@ commitscope review \
   --out /protected/reviews/run-id \
   --auth account \
   --allow-code-upload \
-  --model claude-sonnet-5
+  --model APPROVED_EXACT_MODEL_ID
 ```
 
 `--allow-code-upload` is explicit consent to send the bounded, screened source packet
-to Anthropic under the selected account's terms. Use the exact model ID approved by
-your organization; aliases such as `sonnet` are rejected. Login failure, exhausted
-quota, an unavailable model, timeout, malformed output, missing scanner coverage, or
-any failed stage produces `INCOMPLETE`; there is no API-key or alternate-provider
-fallback.
+to Anthropic under the selected account's terms. Replace `APPROVED_EXACT_MODEL_ID`
+with the exact model ID approved by your organization; aliases such as `sonnet` are
+rejected. Login failure, exhausted quota, an unavailable model, timeout, malformed
+output, missing scanner coverage, or any failed stage produces `INCOMPLETE`; there
+is no API-key or alternate-provider fallback.
 
 Dependency inventory is strict by default. Add `--allow-empty-sca "reviewed reason"`
 only for an audited standard-library-only project after checking imports and build

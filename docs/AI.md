@@ -11,7 +11,7 @@ Corporate review requires all of the following:
 
 - an existing first-party claude.ai account login selected with `--auth account`;
 - explicit `--allow-code-upload` consent and a policy that permits upload;
-- a full organization-approved model ID such as `claude-sonnet-5`, not an alias;
+- the full organization-approved model ID, not an alias or an example ID;
 - completed secret scanning before a source packet is created;
 - bounded `--max-turns` and per-call `--ai-timeout`;
 - tools disabled, no permission prompts, empty MCP configuration, ordinary settings

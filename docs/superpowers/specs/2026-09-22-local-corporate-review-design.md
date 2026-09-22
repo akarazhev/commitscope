@@ -27,8 +27,10 @@ commitscope review \
   --out /protected/reviews/run-id \
   --auth account \
   --allow-code-upload \
-  --model claude-sonnet-5
+  --model APPROVED_EXACT_MODEL_ID
 ```
+
+Replace the model placeholder with the organization's approved exact ID before use.
 
 The developer then gives the protected run directory to the assigned reviewer. The
 reviewer runs:

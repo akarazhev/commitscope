@@ -1,4 +1,8 @@
-# Evidence inventory — 2026-09-20
+# Historical 2.1.1 Evidence Inventory — 2026-09-20
+
+This is archived evidence, not CommitScope 2.4.0 acceptance. For the current
+corporate workflow and verification limits, see [Start Here](../../../START-HERE.md)
+and [Verification](../../VERIFICATION.md).
 
 The `original-*` files are repeat checks of the original 2.1 archive.
 `unit-tests.txt`, `public-cli-smoke.txt`, `real-application-tests.txt`, and

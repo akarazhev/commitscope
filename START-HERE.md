@@ -63,7 +63,7 @@ commitscope review \
   --out /protected/reviews/run-id \
   --auth account \
   --allow-code-upload \
-  --model claude-sonnet-5
+  --model APPROVED_EXACT_MODEL_ID
 ```
 
 The command exports the committed snapshot, runs Semgrep, Gitleaks, Trivy, Claude
@@ -76,7 +76,8 @@ owner may add `--allow-empty-sca "Owner reviewed imports and build metadata; no
 third-party runtime or build dependencies."` The reason is evidence, not a bypass for
 an unsupported or missing lockfile.
 
-Aliases are not stable model pins, so provide the organization-approved full model ID.
+Replace `APPROVED_EXACT_MODEL_ID` with the organization-approved full model ID. Aliases
+are not stable model pins.
 Login, quota, model, network, timeout, or structured-output failure returns
 `INCOMPLETE`. CommitScope never retries through an API key or another provider.
 

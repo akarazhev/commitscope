@@ -44,11 +44,12 @@ commitscope review \
   --out /protected/reviews/run-id \
   --auth account \
   --allow-code-upload \
-  --model claude-sonnet-5
+  --model APPROVED_EXACT_MODEL_ID
 ```
 
-The account status is checked separately before each stage. The selected full model ID
-is passed explicitly and must match the model metadata returned by both calls. Aliases,
+Replace `APPROVED_EXACT_MODEL_ID` with the approved exact ID. The account status is
+checked separately before each stage. The selected full model ID is passed explicitly
+and must match the model metadata returned by both calls. Aliases,
 `-latest` names, environment model overrides, fallback models, custom base URLs,
 profiles, API keys, bearer tokens, gateways, Bedrock, Vertex, and Foundry routing are
 rejected for this path.

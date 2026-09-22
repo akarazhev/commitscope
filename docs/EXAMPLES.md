@@ -10,12 +10,13 @@ commitscope review \
   --out /protected/reviews/application-001 \
   --auth account \
   --allow-code-upload \
-  --model claude-sonnet-5
+  --model APPROVED_EXACT_MODEL_ID
 ```
 
 Use a clean target and a new output path. The policy and output must be absolute,
 outside the target, free of symlink components, and protected from group/world writes.
-The account and policy must both permit source transfer.
+The account and policy must both permit source transfer. Replace `APPROVED_EXACT_MODEL_ID`
+in every command below with the approved exact ID before running it.
 
 After the command returns, preserve the directory for every state:
 
@@ -50,7 +51,7 @@ commitscope review \
   --auth account \
   --allow-code-upload \
   --allow-empty-sca "Owner checked imports and build metadata: no third-party runtime or build dependencies." \
-  --model claude-sonnet-5
+  --model APPROVED_EXACT_MODEL_ID
 ```
 
 The declaration is recorded but not authenticated or independently proved. Do not use
@@ -65,7 +66,7 @@ commitscope review \
   --ref 0123456789abcdef0123456789abcdef01234567 \
   --policy /protected/review-policy.json \
   --out /protected/reviews/application-001 \
-  --auth account --allow-code-upload --model claude-sonnet-5 || status=$?
+  --auth account --allow-code-upload --model APPROVED_EXACT_MODEL_ID || status=$?
 
 case "$status" in
   0) printf '%s\n' 'Evidence is ready for a human reviewer.' ;;
