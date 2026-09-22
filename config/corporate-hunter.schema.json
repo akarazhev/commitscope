@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["summary", "findings", "limitations"],
+  "properties": {
+    "summary": {"type": "string"},
+    "limitations": {"type": "array", "items": {"type": "string"}},
+    "findings": {
+      "type": "array", "maxItems": 30,
+      "$comment": "Runtime validation requires unique IDs, supplied paths and in-range source lines.",
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["id", "severity", "path", "line", "title", "attacker_control", "trace", "impact", "evidence", "counterarguments", "reproduction_plan"],
+        "properties": {
+          "id": {"type": "string", "pattern": "^AI-[0-9]{3}$"},
+          "severity": {"type": "string", "enum": ["critical", "high", "medium", "low", "unknown"]},
+          "path": {"$ref": "#/$defs/nonempty"},
+          "line": {"type": "integer", "minimum": 1},
+          "title": {"$ref": "#/$defs/nonempty"},
+          "attacker_control": {"$ref": "#/$defs/nonempty"},
+          "trace": {"$ref": "#/$defs/nonempty"},
+          "impact": {"$ref": "#/$defs/nonempty"},
+          "evidence": {"$ref": "#/$defs/nonempty"},
+          "counterarguments": {"$ref": "#/$defs/nonempty"},
+          "reproduction_plan": {"$ref": "#/$defs/nonempty"}
+        }
+      }
+    }
+  },
+  "$defs": {"nonempty": {"type": "string", "minLength": 1, "pattern": "\\S"}}
+}

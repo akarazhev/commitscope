@@ -3,11 +3,19 @@
   "resources": [
     {
       "path": "config/claude-settings.json",
-      "sha256": "3cb8be7ddfa3f32aa584c2eab97671caa933978fd4ba414ad5316d34252be77e"
+      "sha256": "d9a29b8a2ea1245c67c3a6d15060c962d80e505a58a95c59dade61a2f288202d"
     },
     {
       "path": "config/claude.version",
       "sha256": "6599c5b040152a44e4aa791dea42350000b1f3b3e2f2cb349abcae94f23841d0"
+    },
+    {
+      "path": "config/corporate-hunter.schema.json",
+      "sha256": "700104da805e5865ab7068ee4594e48a532029629cfcb45b6e2f2f3621ed2da9"
+    },
+    {
+      "path": "config/corporate-verifier.schema.json",
+      "sha256": "6b65d81003a09ce3c975ea93d9a01f6aa76c3b7f7563d92c4cdd8a7f981fca72"
     },
     {
       "path": "config/empty-mcp.json",
@@ -31,7 +39,7 @@
     },
     {
       "path": "config/sdist-manifest.json",
-      "sha256": "b70f2c35fad59a05b8d12952044b18de3e491e557016752f886a202ff148336a"
+      "sha256": "367a04d1babd07f4d2442c291ae20e53504eceea09a551720decdaa67124c8bd"
     },
     {
       "path": "config/semgrep.yaml",
@@ -80,6 +88,14 @@
     {
       "path": "examples/vulnerable/requirements.txt",
       "sha256": "2e04d00f865942852b556b8dd2e5251932d5e32d107dc3ddf3120e9236a1e37f"
+    },
+    {
+      "path": "prompts/corporate-hunter.md",
+      "sha256": "1c030040767eb23ed699bb44b8ded3e3b89c82ef632e3c17e971590eacbbff8c"
+    },
+    {
+      "path": "prompts/corporate-verifier.md",
+      "sha256": "b7af62697d2009edd53cae16bed0c268f0d6c1e31bff14b433b834cd7979d386"
     },
     {
       "path": "prompts/hunter.md",

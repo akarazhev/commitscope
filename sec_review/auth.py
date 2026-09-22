@@ -19,6 +19,19 @@ from .paths import current_resource_root
 
 AUTH_MODES = ('subscription', 'api')
 CREDENTIAL_ENV_KEYS = ('ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'CLAUDE_CODE_OAUTH_TOKEN')
+CORPORATE_BLOCKED_ENV_PREFIXES = ('ANTHROPIC_', 'CLAUDE_CODE_USE_')
+CORPORATE_BLOCKED_ENV_NAMES = (
+    'CLAUDE_CODE_OAUTH_TOKEN', 'CLAUDE_CODE_SIMPLE', 'CLAUDE_CODE_SUBAGENT_MODEL',
+    'AWS_BEDROCK_RUNTIME_ENDPOINT', 'GOOGLE_APPLICATION_CREDENTIALS',
+    'CLOUD_ML_REGION',
+)
+CORPORATE_OVERRIDE_ENV_NAMES = (
+    'CLAUDE_CODE_MODEL', 'CLAUDE_CODE_FALLBACK_MODEL', 'CLAUDE_CODE_PROFILE',
+    'CLAUDE_CODE_BASE_URL', 'CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST',
+    'AWS_PROFILE', 'AWS_DEFAULT_PROFILE', 'AWS_CONFIG_FILE', 'AWS_SHARED_CREDENTIALS_FILE',
+    'AWS_BEARER_TOKEN_BEDROCK', 'AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY', 'AWS_SESSION_TOKEN',
+    'AWS_ENDPOINT_URL', 'AWS_ENDPOINT_URL_BEDROCK_RUNTIME',
+)
 
 
 def require_mode(mode: str | None) -> str:
@@ -203,3 +216,50 @@ def check_auth(mode: str) -> dict[str, Any]:
     """Public non-model diagnostic; never reads the application or initiates login."""
     with tempfile.TemporaryDirectory(prefix='sr-auth-') as directory:
         return prepare_claude(Path(directory), mode).metadata
+
+
+def prepare_account_claude(work: Path) -> PreparedClaude:
+    """Prepare a saved first-party account login without changing legacy auth modes."""
+    blocked = sorted(name for name, value in os.environ.items() if value and (
+        name.startswith(CORPORATE_BLOCKED_ENV_PREFIXES)
+        or name in CORPORATE_BLOCKED_ENV_NAMES or name in CORPORATE_OVERRIDE_ENV_NAMES))
+    if blocked:
+        raise ReviewError('Corporate account auth rejects ambient overrides: ' + ', '.join(blocked))
+    work = work.resolve(strict=True)
+    home = work / 'home'
+    home.mkdir(mode=0o700, exist_ok=True)
+    env = child_env(home, network=True)
+    for name in ('HOME', 'CLAUDE_CONFIG_DIR'):
+        value = os.environ.get(name)
+        if name == 'HOME' and not value:
+            raise ReviewError('Corporate account auth requires the real HOME for saved login.')
+        if value:
+            if not Path(value).is_absolute():
+                raise ReviewError(f'{name} must be an explicit existing absolute directory for saved login.')
+            env[name] = _absolute_directory(value, name)
+    env.update(CLAUDE_CODE_SKIP_PROMPT_HISTORY='1',
+               CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC='1', DISABLE_AUTOUPDATER='1')
+    executable = locate_claude(env['PATH'])
+    if not executable:
+        raise ReviewError('Claude Code was not found; install the official CLI and use claude auth login.')
+    common = settings_flags('subscription')
+    help_result = execute([executable, *common, '--help'], work, env, 30)
+    if help_result.code != 0 or help_result.timed_out or help_result.truncated:
+        raise ReviewError('Corporate Claude capability check failed; no less restricted fallback is used.')
+    version = execute([executable, *common, '--version'], work, env, 30)
+    match = re.search(r'(?<![0-9])([0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,4})(?![0-9])', version.stdout)
+    if version.code != 0 or version.timed_out or version.truncated or not match:
+        raise ReviewError('Cannot determine the corporate Claude CLI version.')
+    result = execute([executable, *common, 'auth', 'status'], work, env, 30)
+    if result.code != 0 or result.timed_out or result.truncated:
+        raise ReviewError('Corporate account login check failed; run claude auth login. No fallback was attempted.')
+    try:
+        status = decode_json(result.stdout)
+    except ReviewError:
+        raise ReviewError('Corporate account status returned invalid JSON; raw auth status is not saved.') from None
+    if (not isinstance(status, dict) or status.get('loggedIn') is not True
+            or status.get('authMethod') != 'claude.ai' or status.get('apiProvider') != 'firstParty'
+            or status.get('apiKeySource') not in (None, '')):
+        raise ReviewError('Corporate account auth requires an existing first-party claude.ai login; no fallback is allowed.')
+    return PreparedClaude(executable, env, {'auth_method': 'claude.ai', 'provider': 'firstParty',
+                                           'claude_version': match.group(1)})

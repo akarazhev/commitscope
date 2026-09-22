@@ -43,6 +43,8 @@ version = {attr = "sec_review.__version__"}
 "share/commitscope/config" = [
   "config/claude-settings.json",
   "config/claude.version",
+  "config/corporate-hunter.schema.json",
+  "config/corporate-verifier.schema.json",
   "config/empty-mcp.json",
   "config/gitleaks.toml",
   "config/hunter.schema.json",
@@ -56,6 +58,8 @@ version = {attr = "sec_review.__version__"}
   "config/verifier.schema.json",
 ]
 "share/commitscope/prompts" = [
+  "prompts/corporate-hunter.md",
+  "prompts/corporate-verifier.md",
   "prompts/hunter.md",
   "prompts/verifier.md",
 ]
