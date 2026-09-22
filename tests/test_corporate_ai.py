@@ -12,6 +12,7 @@ import sys
 import tempfile
 import unittest
 from unittest.mock import patch
+from urllib.parse import quote
 
 from sec_review import ai, auth
 from sec_review.core import ProcessResult, ReviewError, read_json
@@ -66,14 +67,15 @@ if '--help' in argv:
 elif '--version' in argv:
     print('2.1.999 (synthetic corporate protocol double)')
 elif 'auth' in argv:
-    print(json.dumps(config['auth']))
+    status = config.get('verifier_auth', config['auth']) if Path.cwd().name.startswith('sr-corporate-verifier-') else config['auth']
+    print(json.dumps(status))
     sys.exit(config.get('auth_code', 0))
 else:
     stage = 'verifier' if 'original_packet' in json.loads(payload) else 'hunter'
     if config.get('sleep_stage') == stage:
         time.sleep(10)
     print(config.get(stage + '_raw', json.dumps(config[stage])))
-    print('Synthetic protocol diagnostic', file=sys.stderr)
+    print(config.get(stage + '_stderr', 'Synthetic protocol diagnostic'), file=sys.stderr)
     sys.exit(config.get(stage + '_code', 0))
 '''
 
@@ -127,7 +129,7 @@ class CorporateFixture(unittest.TestCase):
         return [json.loads(line) for line in self.record.read_text().splitlines()] if self.record.exists() else []
 
     def run_review(self, **options):
-        with self.synthetic():
+        with self.synthetic(**options.get('environment', {})):
             return ai.run_corporate_ai(self.source, self.report, self.policy, self.out,
                                        model=MODEL, timeout=options.get('timeout', 30), max_turns=3)
 
@@ -296,6 +298,156 @@ class CorporatePacketTests(CorporateFixture):
         self.policy['code_upload']['allowed'] = False
         with self.assertRaises(ReviewError):
             ai.make_corporate_packet(self.source, self.report, self.policy)
+
+
+class CorporatePrivacyTests(CorporateFixture):
+    def setUp(self):
+        super().setUp()
+        email = 'synthetic.account@example.invalid'
+        account = '11112222-3333-4444-8555-666677778888'
+        organization = 'SYNTHETIC_ORGANIZATION_NAME'
+        username, password = 'proxy-user@example.invalid', 'P@ss:"\\\u00e9/Proxy!'
+        self.environment = {
+            'HTTPS_PROXY': 'http://' + quote(username, safe='') + ':' + quote(password, safe='') + '@proxy.invalid:8080',
+            'HTTP_PROXY': 'http://plain-proxy-user:proxy-password-fixture@proxy.invalid:3128',
+        }
+        self.sensitive = (email, account, organization, username, password,
+                          quote(username, safe=''), quote(password, safe=''),
+                          'plain-proxy-user', 'proxy-password-fixture')
+        self.echo = ' | '.join(self.sensitive)
+        self.config['auth'].update(email=email, accountUuid=account,
+                                   organization={'id': organization})
+        self.config['hunter']['structured_output']['summary'] = 'Safe summary: ' + self.echo
+        for finding in self.config['hunter']['structured_output']['findings']:
+            finding['evidence'] = 'Safe source evidence app.py:1; ' + self.echo
+        for verdict in self.config['verifier']['structured_output']['verdicts']:
+            verdict['reason'] = 'Safe verifier reasoning; ' + self.echo
+            verdict['evidence'] = 'Safe source evidence app.py:1; ' + self.echo
+        for stage in ('hunter', 'verifier'):
+            self.config[stage + '_stderr'] = 'Safe diagnostic; ' + self.echo
+
+    def assert_private(self, value):
+        texts = [value] if isinstance(value, str) else [json.dumps(value, ensure_ascii=False), json.dumps(value)]
+        for sensitive in self.sensitive:
+            for text in texts:
+                for form in (sensitive, json.dumps(sensitive)[1:-1],
+                             json.dumps(sensitive, ensure_ascii=False)[1:-1]):
+                    self.assertNotIn(form, text)
+
+    def assert_private_result(self, report):
+        self.assert_private(report)
+        for path in self.out.rglob('*'):
+            if path.is_file():
+                self.assert_private(path.read_text())
+                if path.suffix == '.json':
+                    self.assert_private(read_json(path))
+
+    def test_privacy_success_sanitizes_packet_reports_evidence_and_logs(self):
+        (self.source / 'app.py').write_text('pass\n# ' + self.echo + '\n')
+        self.policy['owner'] = 'Application Security: ' + self.sensitive[0]
+        self.report['findings'][0]['title'] += '; ' + self.sensitive[1]
+        self.config['hunter_raw'] = json.dumps(self.config['hunter']).replace('synthetic.account',
+                                                                            r'synthetic.\u0061ccount')
+        result = self.run_review(environment=self.environment)
+        self.assertEqual(result['ai']['status'], 'complete', result['ai'])
+        self.assert_private_result(result)
+        self.assertTrue(result['ai']['summary'].startswith('Safe summary: '))
+        self.assertTrue(result['findings'][0]['title'].startswith('Scanner survives; '))
+        self.assertEqual(len(result['findings']), 3)
+        self.assertTrue(result['findings'][1]['evidence'].startswith('Safe source evidence app.py:1; '))
+        for call in self.calls():
+            if call['stdin'] is not None:
+                self.assert_private(json.loads(call['stdin']))
+        self.assertIn('Safe diagnostic;', (self.out / 'private/model-logs/hunter.log').read_text())
+
+    def test_privacy_nonzero_and_malformed_responses_withhold_sensitive_raw_output(self):
+        for failure in ('nonzero', 'malformed', 'duplicate'):
+            with self.subTest(failure=failure):
+                self.config['hunter_code'] = 1 if failure == 'nonzero' else 0
+                if failure == 'duplicate':
+                    key = json.dumps(self.sensitive[0])
+                    self.config['hunter_raw'] = '{' + key + ':0,' + key + ':1}'
+                else:
+                    self.config['hunter_raw'] = 'Synthetic failure: ' + self.echo
+                result = self.run_review(environment=self.environment)
+                self.assertEqual(result['ai']['status'], 'failed')
+                self.assertEqual(len(result['findings']), 1)
+                self.assert_private_result(result)
+                self.assertIn('Safe diagnostic;', (self.out / 'private/model-logs/hunter.log').read_text())
+
+    def test_privacy_exception_messages_are_sanitized_before_return(self):
+        with patch('sec_review.ai.execute', side_effect=ReviewError('Synthetic failure: ' + self.echo)):
+            result = self.run_review(environment=self.environment)
+        self.assertEqual(result['ai']['status'], 'failed')
+        self.assertTrue(result['ai']['error'].startswith('Synthetic failure: '))
+        self.assert_private_result(result)
+
+    def test_privacy_sensitive_channel_is_absent_from_repr_and_metadata(self):
+        with self.synthetic(**self.environment):
+            prepared = auth.prepare_account_claude(self.root)
+        self.assertTrue(getattr(prepared, 'sensitive_values', ()), 'Missing corporate sensitive-value channel')
+        self.assert_private(repr(prepared))
+        self.assert_private(prepared.metadata)
+
+    def test_privacy_redaction_that_changes_candidate_ids_fails_schema_validation(self):
+        self.environment['http_proxy'] = self.environment['HTTP_PROXY']
+        self.environment['HTTP_PROXY'] = 'http://AI-001:proxy-password-fixture@proxy.invalid:3128'
+        result = self.run_review(environment=self.environment)
+        self.assertEqual(result['ai']['status'], 'failed')
+        self.assertEqual(len(result['findings']), 1)
+        self.assert_private_result(result)
+        self.assertNotIn('AI-001', json.dumps(result))
+        for path in self.out.rglob('*'):
+            if path.is_file():
+                self.assertNotIn('AI-001', path.read_text())
+
+    def test_privacy_does_not_rename_trusted_artifact_paths(self):
+        self.environment['http_proxy'] = 'http://model-output:extra-password@proxy.invalid:3128'
+        result = self.run_review(environment=self.environment)
+        self.assertEqual(result['ai']['status'], 'complete', result['ai'])
+        self.assert_private_result(result)
+        self.assertTrue((self.out / 'private/model-output/hunter.json').is_file())
+        self.assertTrue((self.out / 'private/model-output/verifier.json').is_file())
+
+    def test_privacy_preserves_program_defined_report_keys(self):
+        self.environment['http_proxy'] = 'http://ai:extra-password@proxy.invalid:3128'
+        result = self.run_review(environment=self.environment)
+        self.assertIn('ai', result)
+        self.assertEqual(result['ai']['status'], 'complete', result['ai'])
+        self.assertEqual(result['ai']['authentication']['auth_method'], 'claude.ai')
+        self.assertTrue(all(finding['status'] == 'ai_hypothesis' for finding in result['findings'][1:]))
+        self.assert_private_result(result)
+
+    def test_privacy_proxy_percent_escapes_are_redacted_regardless_of_hex_case(self):
+        mixed_case = quote(self.sensitive[4], safe='').replace('%3A', '%3a')
+        self.sensitive += (mixed_case,)
+        self.config['hunter']['structured_output']['summary'] += '; ' + mixed_case
+        self.config['hunter_stderr'] += '; ' + mixed_case
+        result = self.run_review(environment=self.environment)
+        self.assertEqual(result['ai']['status'], 'complete', result['ai'])
+        self.assert_private_result(result)
+
+    def test_privacy_verifier_failure_retains_only_sanitized_hunter_evidence(self):
+        self.config['verifier_code'] = 1
+        result = self.run_review(environment=self.environment)
+        self.assertEqual(result['ai']['status'], 'failed')
+        self.assertEqual(len(result['findings']), 1)
+        self.assertTrue((self.out / 'evidence/hunter.json').is_file())
+        self.assertTrue((self.out / 'private/model-output/verifier.json').is_file())
+        self.assert_private_result(result)
+
+    def test_privacy_second_auth_identifiers_are_removed_from_prior_stage_artifacts(self):
+        later_identity = 'SECOND_SYNTHETIC_ACCOUNT_ID'
+        self.config['verifier_auth'] = {**self.config['auth'], 'accountUuid': later_identity}
+        self.config['hunter']['structured_output']['summary'] += '; ' + later_identity
+        self.config['hunter_stderr'] += '; ' + later_identity
+        self.sensitive += (later_identity,)
+        result = self.run_review(environment=self.environment)
+        self.assertEqual(result['ai']['status'], 'complete', result['ai'])
+        self.assert_private_result(result)
+        verifier_call = next(call for call in self.calls() if call['stdin'] and
+                             'original_packet' in json.loads(call['stdin']))
+        self.assert_private(json.loads(verifier_call['stdin']))
 
 
 class CorporateProtocolTests(CorporateFixture):

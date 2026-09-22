@@ -6,6 +6,7 @@ read, copy, exchange, refresh, or serialize saved OAuth credentials itself.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import json
 import math
 import os
 from pathlib import Path
@@ -13,6 +14,7 @@ import re
 import shutil
 import tempfile
 from typing import Any
+from urllib.parse import quote, unquote, urlsplit
 
 from .core import ReviewError, child_env, decode_json, execute
 from .paths import current_resource_root
@@ -154,6 +156,68 @@ class PreparedClaude:
     executable: str
     env: dict[str, str] = field(repr=False)
     metadata: dict[str, Any] = field(default_factory=dict)
+    sensitive_values: tuple[str, ...] = field(default_factory=tuple, repr=False)
+
+
+def corporate_sensitive_values(environment: dict[str, str], status: dict | None = None) -> tuple[str, ...]:
+    """Keep account identity and proxy userinfo in memory, outside public metadata."""
+    values = set()
+    for name in ('HTTP_PROXY', 'HTTPS_PROXY', 'http_proxy', 'https_proxy'):
+        if not environment.get(name):
+            continue
+        try:
+            proxy = urlsplit(environment[name])
+            values.update(value for value in (proxy.username, proxy.password) if value)
+        except ValueError:
+            raise ReviewError(f'Invalid {name} URL; proxy details are not recorded.') from None
+    # Unknown auth-status fields may contain future identity fields. Only known
+    # protocol fields are exempt from the private redaction channel.
+    protocol = {'loggedIn', 'authMethod', 'apiProvider', 'apiKeySource', 'subscriptionType'}
+    pending = [value for key, value in (status or {}).items() if key not in protocol]
+    while pending:
+        value = pending.pop()
+        if isinstance(value, str) and value:
+            values.add(value)
+        elif isinstance(value, dict):
+            pending.extend(value.values())
+        elif isinstance(value, list):
+            pending.extend(value)
+    forms = set()
+    for value in values:
+        decoded = unquote(value)
+        forms.update((value, decoded, quote(decoded, safe='')))
+    return tuple(sorted(forms, key=lambda value: (-len(value), value)))
+
+
+def redact_corporate(text: str, sensitive_values: tuple[str, ...] | set[str]) -> str:
+    """Corporate-only redaction; legacy auth and AI retain their existing policy."""
+    forms = {form for value in sensitive_values for form in (
+        value, json.dumps(value, ensure_ascii=False)[1:-1], json.dumps(value)[1:-1]) if form}
+    if forms:
+        patterns = [re.sub(r'%[0-9a-fA-F]{2}', lambda match: '(?i:' + match[0] + ')', re.escape(form))
+                    for form in sorted(forms, key=lambda value: (-len(value), value))]
+        text = re.sub('|'.join(patterns), '[REDACTED_CORPORATE]', text)
+    return redact_credentials(text)
+
+
+def redact_corporate_value(value: Any, sensitive_values: tuple[str, ...] | set[str], *,
+                           redact_keys: bool = True, public_fields: frozenset[str] = frozenset()) -> Any:
+    """Redact JSON strings and keys without changing numbers or escaping semantics."""
+    if isinstance(value, str):
+        return redact_corporate(value, sensitive_values)
+    if isinstance(value, list):
+        return [redact_corporate_value(item, sensitive_values, redact_keys=redact_keys,
+                                      public_fields=public_fields) for item in value]
+    if isinstance(value, dict):
+        result = {}
+        for key, item in value.items():
+            clean_key = redact_corporate(key, sensitive_values) if redact_keys else key
+            if clean_key in result:
+                raise ReviewError('Corporate redaction produced duplicate JSON keys.')
+            result[clean_key] = item if key in public_fields else redact_corporate_value(
+                item, sensitive_values, redact_keys=redact_keys, public_fields=public_fields)
+        return result
+    return value
 
 
 def locate_claude(path: str | None = None) -> str | None:
@@ -262,4 +326,5 @@ def prepare_account_claude(work: Path) -> PreparedClaude:
             or status.get('apiKeySource') not in (None, '')):
         raise ReviewError('Corporate account auth requires an existing first-party claude.ai login; no fallback is allowed.')
     return PreparedClaude(executable, env, {'auth_method': 'claude.ai', 'provider': 'firstParty',
-                                           'claude_version': match.group(1)})
+                                           'claude_version': match.group(1)},
+                          sensitive_values=corporate_sensitive_values(env, status))

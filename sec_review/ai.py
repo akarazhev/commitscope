@@ -3,6 +3,7 @@ from __future__ import annotations
 from fnmatch import fnmatchcase
 import json
 import math
+import os
 from pathlib import Path
 import re
 import tempfile
@@ -11,7 +12,9 @@ from .paths import current_resource_root
 from .snapshot import export_snapshot
 from .reports import save_reports
 from .scanners import finding
-from .auth import prepare_account_claude, prepare_claude, settings_flags, validate_ai_options, redact_credentials
+from .auth import (corporate_sensitive_values, prepare_account_claude, prepare_claude,
+                   redact_corporate, redact_corporate_value, settings_flags,
+                   validate_ai_options, redact_credentials)
 from .policy import _validate_policy
 
 CODE_SUFFIXES={'.py','.js','.jsx','.ts','.tsx','.go','.rs','.java','.rb','.php','.sql','.c','.h','.cpp','.cs'}
@@ -332,9 +335,11 @@ def run_corporate_ai(source: Path, report: dict, policy: dict, out: Path, *,
     report['ai'] = {'requested': True, 'status': 'running', 'auth_mode': 'account',
                     'model_requested': model, 'max_turns_per_call': max_turns,
                     'timeout_seconds_per_call': timeout, 'started_at': now(), 'stages': {}}
-    state, env = report['ai'], {}
+    state = report['ai']
+    sensitive_values, artifacts = set(), {}
     stage = None
     try:
+        sensitive_values.update(corporate_sensitive_values(os.environ))
         validate_exact_model(model)
         validate_ai_options('subscription', None, max_turns, timeout)
         _validate_policy(policy)
@@ -346,7 +351,7 @@ def run_corporate_ai(source: Path, report: dict, policy: dict, out: Path, *,
             with tempfile.TemporaryDirectory(prefix=f'sr-corporate-{stage}-') as directory:
                 work = Path(directory).resolve(strict=True)
                 prepared = prepare_account_claude(work)
-                env = prepared.env
+                sensitive_values.update(prepared.sensitive_values)
                 stage_state['authentication'] = prepared.metadata
                 if packet is None:
                     packet = make_corporate_packet(source, report, policy)
@@ -356,17 +361,32 @@ def run_corporate_ai(source: Path, report: dict, policy: dict, out: Path, *,
                     for name in ('ai-input', 'model-output', 'model-logs'):
                         private_dir(out / 'private' / name)
                     private_dir(out / 'evidence')
-                    write_json(out / 'private/ai-input/packet.json', packet)
-                    state['omitted_files'] = packet['omitted']
-                    state['authentication'] = prepared.metadata
+                    state['authentication'] = stage_state['authentication']
+                packet = redact_corporate_value(packet, sensitive_values)
+                if any(item['line_count'] != max(1, len(item['content'].splitlines())) for item in packet['files']):
+                    raise ReviewError('Corporate privacy redaction changes source line boundaries.')
+                packet['source_bytes'] = sum(len(item['content'].encode('utf-8')) for item in packet['files'])
+                if packet['source_bytes'] > policy['code_upload']['max_bytes']:
+                    raise ReviewError('Redacted corporate source exceeds the source byte budget.')
+                artifacts['private/ai-input/packet.json'] = packet
+                state['omitted_files'] = packet['omitted']
+                if stage == 'verifier':
+                    state['hunter'] = redact_corporate_value(state['hunter'], sensitive_values)
+                    validate_corporate_hunter(state['hunter'], packet)
                 payload = packet if stage == 'hunter' else {
                     'original_packet': packet, 'candidates': state['hunter']['findings']}
                 result = execute(corporate_claude_command(prepared.executable, stage, model, max_turns),
-                                 work, env, timeout, json.dumps(payload, allow_nan=False))
+                                 work, prepared.env, timeout, json.dumps(payload, allow_nan=False))
                 stage_state['seconds'] = result.seconds
-                stdout = redact_credentials(result.stdout, env)
-                write_text(out / 'private/model-output' / f'{stage}.json', stdout)
-                write_text(out / 'private/model-logs' / f'{stage}.log', redact_credentials(result.stderr, env))
+                artifacts[f'private/model-logs/{stage}.log'] = redact_corporate(result.stderr, sensitive_values)
+                try:
+                    envelope = redact_corporate_value(decode_json(result.stdout), sensitive_values)
+                    stdout = json.dumps(envelope, ensure_ascii=False, allow_nan=False)
+                except (ReviewError, ValueError, TypeError, RecursionError):
+                    artifacts[f'private/model-output/{stage}.json'] = {
+                        'error': 'Invalid model output withheld for privacy.'}
+                    raise ReviewError(f'Claude {stage} returned invalid JSON; raw output withheld for privacy.') from None
+                artifacts[f'private/model-output/{stage}.json'] = envelope
                 if result.code != 0 or result.timed_out or result.truncated:
                     raise ReviewError(f'Claude {stage} failed (nonzero exit, timeout or truncated output); no fallback.')
                 value = corporate_structured(stdout, model)
@@ -375,7 +395,7 @@ def run_corporate_ai(source: Path, report: dict, policy: dict, out: Path, *,
                 else:
                     validate_corporate_verifier(value, [item['id'] for item in state['hunter']['findings']])
                 state[stage] = value
-                write_json(out / 'evidence' / f'{stage}.json', value)
+                artifacts[f'evidence/{stage}.json'] = value
                 stage_state.update(status='complete', finished_at=now(), model=model)
         verdicts = {item['finding_id']: item for item in state['verifier']['verdicts']}
         for item in state['hunter']['findings']:
@@ -392,8 +412,26 @@ def run_corporate_ai(source: Path, report: dict, policy: dict, out: Path, *,
                      limitations=state['hunter']['limitations'],
                      warning='AI conclusions are advisory and not reproduced. Scanner findings are preserved. '
                              'Human triage and approval remain external.')
-    except (ReviewError, OSError, KeyError, ValueError, TypeError) as error:
+    except (ReviewError, OSError, KeyError, ValueError, TypeError, RecursionError) as error:
         if stage in state['stages']:
             state['stages'][stage].update(status='failed', finished_at=now())
-        state.update(status='failed', finished_at=now(), error=redact_credentials(str(error), env))
+        state.update(status='failed', finished_at=now(), error=redact_corporate(str(error), sensitive_values))
+    # Account status is checked independently for each stage. Delay persistence so
+    # identifiers learned in either stage are removed from every saved artifact.
+    # These values are public protocol constants, not auth-status identity text.
+    public_fields = frozenset({'status', 'auth_mode', 'auth_method', 'provider', 'claude_version'})
+    clean_report = redact_corporate_value(report, sensitive_values, redact_keys=False,
+                                         public_fields=public_fields)
+    report.clear()
+    report.update(clean_report)
+    try:
+        clean_artifacts = {relative: redact_corporate_value(value, sensitive_values)
+                           for relative, value in artifacts.items()}
+        for relative, value in clean_artifacts.items():
+            if relative.endswith('.json'):
+                write_json(out / relative, value)
+            else:
+                write_text(out / relative, value)
+    except (ReviewError, OSError, ValueError, TypeError, RecursionError) as error:
+        report['ai'].update(status='failed', finished_at=now(), error=redact_corporate(str(error), sensitive_values))
     return report
