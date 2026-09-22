@@ -6,7 +6,6 @@ __pycache__/
 .env
 .env.*
 reports/
-docs/security-review-pdfs/
 .worktrees/
 .superpowers/
 build/
