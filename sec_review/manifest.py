@@ -73,7 +73,7 @@ def write_manifest(out: Path, report: dict, request: ReviewRequest) -> dict:
     manifest = {
         'schema_version': '1.0', 'project_version': __version__, 'run_id': report['run_id'],
         'commit_sha': request.commit_sha, 'snapshot_sha256': report['snapshot'].get('snapshot_sha256'),
-        'policy': {'path': str(request.policy_path), 'sha256': request.policy_sha256},
+        'policy': {'path': report['review']['policy_path'], 'sha256': request.policy_sha256},
         'resources': resources,
         'prompts': {key: value for key, value in resources.items() if key.startswith('prompts/')},
         'schemas': {key: value for key, value in resources.items() if key.endswith('.schema.json')},

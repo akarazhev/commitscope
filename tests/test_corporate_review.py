@@ -117,6 +117,27 @@ class ReviewFixture(unittest.TestCase):
 
 
 class CorporateReviewTests(ReviewFixture):
+    def test_sensitive_policy_path_is_sanitized_consistently_in_manifest_and_report(self):
+        from sec_review.core import file_hash
+        from sec_review.manifest import verify_review
+        self.prepared_values = [('FIRST_PRIVATE_ACCOUNT_ID',)] * 2
+        for index, value in enumerate(('FIRST_PRIVATE_ACCOUNT_ID', 'sk-ant-' + 'z' * 30)):
+            with self.subTest(value=value):
+                self.out = self.root / f'policy-privacy-{index}'
+                self.events.clear()
+                self.policy_path = self.policy_path.rename(self.root / (value + '.json'))
+                expected_hash = file_hash(self.policy_path)
+                report = self.run_review()
+                self.assertEqual(report['decision']['exit_code'], 0)
+                self.assertNotIn(value, report['review']['policy_path'])
+                manifest = read_json(self.out / 'manifest.json')
+                self.assertEqual(manifest['policy'], {
+                    'path': report['review']['policy_path'], 'sha256': expected_hash})
+                for path in self.out.rglob('*'):
+                    if path.is_file():
+                        self.assertNotIn(value, path.read_text(), path)
+                self.assertEqual(verify_review(self.out)[0], 0)
+
     def test_sensitive_filenames_fail_before_upload_and_are_absent_from_evidence(self):
         from sec_review.manifest import verify_review
         for index, (value, omitted) in enumerate((
