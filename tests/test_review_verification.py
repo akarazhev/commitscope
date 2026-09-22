@@ -45,6 +45,16 @@ class ReviewVerificationTests(ReviewFixture):
         shutil.rmtree(original)
         self.verify(1)
 
+    def test_privacy_withholding_flag_can_never_be_a_complete_review(self):
+        from sec_review.reports import corporate_decision
+        report = self.run_review()
+        report['scanners'][0]['finding_details_withheld_due_to_privacy_collision'] = True
+        self.assertEqual(corporate_decision(report)['exit_code'], 2)
+        for artifact in ('report.json', 'evidence/scanners.json'):
+            self.mutate(artifact, lambda value: value['scanners'][0].update(
+                finding_details_withheld_due_to_privacy_collision=True))
+        self.verify(2)
+
     def test_cli_prints_warning_on_valid_and_invalid_runs(self):
         self.run_review()
         for expected in (0, 2):

@@ -37,6 +37,7 @@ class ReviewFixture(unittest.TestCase):
         self.absolute_scanner_paths = False
         self.assert_private_raw = False
         self.raw_secret = None
+        self.scanner_payload_edit = None
         self.prepared_values = [('DO_NOT_SAVE_ACCOUNT@example.invalid', 'DO_NOT_SAVE_ID')] * 2
         self.original_execute = scanners.execute
 
@@ -67,6 +68,10 @@ class ReviewFixture(unittest.TestCase):
             if self.absolute_scanner_paths:
                 payload['results'][0]['path'] = str(Path(argv[-1]) / 'app.py')
             write_json(path, payload)
+        if self.scanner_payload_edit:
+            payload = read_json(output)
+            self.scanner_payload_edit(name, payload)
+            write_json(output, payload)
         return result
 
     def claude_execute(self, argv, cwd, env, timeout, stdin=None):
@@ -266,6 +271,13 @@ class CorporateReviewTests(ReviewFixture):
                             self.assertNotIn(value, path.read_text(), path)
                 self.assertEqual(verify_review(self.out)[0], code)
 
+    def test_validated_model_protocol_key_survives_final_normalization(self):
+        from sec_review.manifest import verify_review
+        self.prepared_values = [(MODEL,), (MODEL,)]
+        report = self.run_review()
+        self.assertEqual(report['decision']['exit_code'], 0)
+        self.assertEqual(verify_review(self.out)[0], 0)
+
     def test_sensitive_source_files_are_omitted_and_remaining_source_verifies(self):
         from sec_review.manifest import verify_review
         self.prepared_values = [('FIRST_PRIVATE_ACCOUNT_ID',), ('SECOND_PRIVATE_ACCOUNT_ID',)]
@@ -283,7 +295,7 @@ class CorporateReviewTests(ReviewFixture):
         self.assertEqual(report['ai']['omitted_files'], packet['omitted'])
         self.assertEqual(verify_review(self.out)[0], 0)
 
-    def test_sensitive_scanner_protocol_collision_is_incomplete_without_rewriting_finding(self):
+    def test_sensitive_scanner_protocol_collision_withholds_finding_details(self):
         self.extra_scanner_text = 'Synthetic finding'
         for key, value in (('severity', 'high'), ('path', 'app.py'), ('tool', 'semgrep'),
                            ('status', 'scanner_finding'), ('rule_id', 'synthetic')):
@@ -293,8 +305,112 @@ class CorporateReviewTests(ReviewFixture):
                 self.prepared_values = [(value,), (value,)]
                 report = self.run_review()
                 self.assertEqual(report['decision']['exit_code'], 2, report)
-                self.assertEqual(len(report['findings']), 1)
-                self.assertEqual(report['findings'][0][key], value)
+                self.assertEqual(report['findings'], [])
+                scan = report['scanners'][0]
+                self.assertEqual(scan['finding_count'], 1)
+                self.assertTrue(scan['finding_details_withheld_due_to_privacy_collision'])
+
+    def assert_private_values_absent(self):
+        for path in self.out.rglob('*'):
+            if path.is_file():
+                for value in ('FIRST_PRIVATE_ACCOUNT_ID', 'SECOND_PRIVATE_ACCOUNT_ID'):
+                    self.assertNotIn(value, path.read_text(), path)
+
+    def test_nested_scanner_coverage_path_collision_is_incomplete(self):
+        from sec_review.manifest import verify_review
+        self.prepared_values = [('FIRST_PRIVATE_ACCOUNT_ID',), ('SECOND_PRIVATE_ACCOUNT_ID',)]
+        for field in ('scanned', 'skipped', 'skipped_scalar'):
+            with self.subTest(field=field):
+                self.out = self.root / field
+                self.events.clear()
+                def edit(name, payload):
+                    if name == 'semgrep':
+                        if field == 'skipped_scalar':
+                            payload['paths']['skipped'] = ['SECOND_PRIVATE_ACCOUNT_ID']
+                        else:
+                            payload['paths'][field] = (['FIRST_PRIVATE_ACCOUNT_ID'] if field == 'scanned' else
+                                                      [{'path': 'SECOND_PRIVATE_ACCOUNT_ID', 'reason': 'ignored'}])
+                        payload['metadata'] = {'FIRST_PRIVATE_ACCOUNT_ID': {'path': 'SECOND_PRIVATE_ACCOUNT_ID'}}
+                self.scanner_payload_edit = edit
+                report = self.run_review()
+                self.assertEqual(self.events, NAMES + ['hunter', 'verifier'])
+                self.assertEqual(report['decision']['exit_code'], 2)
+                self.assertEqual(report['scanners'][0]['status'], 'incomplete')
+                self.assert_private_values_absent()
+                self.assertEqual(verify_review(self.out)[0], 2)
+
+    def test_arbitrary_scanner_metadata_keys_and_paths_are_sanitized_and_verify(self):
+        from sec_review.manifest import verify_review
+        self.prepared_values = [('FIRST_PRIVATE_ACCOUNT_ID',), ('SECOND_PRIVATE_ACCOUNT_ID',)]
+        (self.repo / 'vulnerable-marker.txt').write_text('synthetic')
+        self.git('add', '.'); self.git('commit', '-qm', 'synthetic metadata findings')
+        self.extra_scanner_text = 'Synthetic finding'
+        def edit(name, payload):
+            for item in payload if isinstance(payload, list) else [payload]:
+                item['metadata'] = {'FIRST_PRIVATE_ACCOUNT_ID': {'path': 'SECOND_PRIVATE_ACCOUNT_ID'}}
+            if name == 'semgrep':
+                payload['results'][0]['extra']['metadata'] = {
+                    'SECOND_PRIVATE_ACCOUNT_ID': {'path': 'FIRST_PRIVATE_ACCOUNT_ID'}}
+        self.scanner_payload_edit = edit
+        report = self.run_review()
+        self.assertEqual(report['decision']['exit_code'], 1)
+        self.assert_private_values_absent()
+        self.assertEqual(verify_review(self.out)[0], 1)
+
+    def test_scanner_metadata_key_redaction_collision_withholds_raw_and_is_incomplete(self):
+        from sec_review.manifest import verify_review
+        self.prepared_values = [('FIRST_PRIVATE_ACCOUNT_ID',), ('SECOND_PRIVATE_ACCOUNT_ID',)]
+        def edit(name, payload):
+            if name == 'semgrep':
+                payload['metadata'] = {'FIRST_PRIVATE_ACCOUNT_ID': 'one', 'SECOND_PRIVATE_ACCOUNT_ID': 'two'}
+        self.scanner_payload_edit = edit
+        report = self.run_review()
+        self.assertEqual(report['decision']['exit_code'], 2)
+        self.assert_private_values_absent()
+        self.assertEqual(verify_review(self.out)[0], 2)
+
+    def test_raw_protocol_collisions_outside_normalized_findings_are_incomplete(self):
+        from sec_review.manifest import verify_review
+        self.prepared_values = [('FIRST_PRIVATE_ACCOUNT_ID',), ('SECOND_PRIVATE_ACCOUNT_ID',)]
+        (self.repo / 'vulnerable-marker.txt').write_text('synthetic')
+        self.git('add', '.'); self.git('commit', '-qm', 'synthetic findings')
+        mutations = {
+            'semgrep': lambda p: p['results'][0]['extra'].update(severity='FIRST_PRIVATE_ACCOUNT_ID'),
+            'gitleaks': lambda p: p[0].update(Fingerprint='FIRST_PRIVATE_ACCOUNT_ID'),
+            'trivy-vuln': lambda p: p['Results'][0]['Packages'][0].update(Name='SECOND_PRIVATE_ACCOUNT_ID'),
+            'trivy-iac': lambda p: p['Results'][0]['Misconfigurations'].append({
+                'ID': 'non-failing', 'Status': 'SECOND_PRIVATE_ACCOUNT_ID'}),
+        }
+        for scanner, mutation in mutations.items():
+            with self.subTest(scanner=scanner):
+                self.out = self.root / scanner
+                self.events.clear()
+                self.scanner_payload_edit = lambda name, payload: mutation(payload) if name == scanner else None
+                report = self.run_review()
+                self.assertEqual(report['decision']['exit_code'], 2)
+                stage = next(item for item in report['scanners'] if item['name'] == scanner)
+                self.assertEqual(stage['status'], 'incomplete')
+                self.assertEqual(stage['finding_count'], 1)
+                self.assertTrue(stage['finding_details_withheld_due_to_privacy_collision'])
+                self.assert_private_values_absent()
+                self.assertEqual(verify_review(self.out)[0], 2)
+
+    def test_scanner_protocol_identity_collision_never_publishes_finding_details(self):
+        from sec_review.manifest import verify_review
+        self.prepared_values = [('FIRST_PRIVATE_ACCOUNT_ID',), ('SECOND_PRIVATE_ACCOUNT_ID',)]
+        self.extra_scanner_text = 'Synthetic finding'
+        def edit(name, payload):
+            if name == 'semgrep':
+                payload['results'][0]['check_id'] = 'FIRST_PRIVATE_ACCOUNT_ID'
+                payload['results'][0]['path'] = 'SECOND_PRIVATE_ACCOUNT_ID'
+        self.scanner_payload_edit = edit
+        report = self.run_review()
+        self.assertEqual(report['decision']['exit_code'], 2)
+        self.assertEqual(report['findings'], [])
+        self.assertEqual(report['scanners'][0]['finding_count'], 1)
+        self.assertTrue(report['scanners'][0]['finding_details_withheld_due_to_privacy_collision'])
+        self.assert_private_values_absent()
+        self.assertEqual(verify_review(self.out)[0], 2)
 
     def test_late_policy_identity_collision_is_sanitized_and_incomplete(self):
         from sec_review.manifest import verify_review

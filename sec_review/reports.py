@@ -36,7 +36,7 @@ def corporate_decision(report: dict) -> dict:
         reasons.append('Missing, duplicate or unordered required scanner result')
     for scan in scans:
         status = scan.get('status')
-        if status not in ('complete', 'not_applicable') or (
+        if scan.get('finding_details_withheld_due_to_privacy_collision') or status not in ('complete', 'not_applicable') or (
                 status == 'not_applicable' and (scan.get('name') in ('semgrep', 'gitleaks') or not scan.get('reason'))):
             reasons.append(f'{scan.get("name")}: incomplete scanner evidence')
     snapshot = report.get('snapshot', {})
