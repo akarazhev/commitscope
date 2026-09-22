@@ -112,6 +112,7 @@ class AcceptanceTests(unittest.TestCase):
             text = (ROOT / relative).read_text()
             active = active_documentation(text)
             self.assertIn(command, active, relative)
+            self.assertNotIn('--model claude-sonnet-5', active, relative)
             for required in (
                 'READY_FOR_HUMAN_REVIEW',
                 'FINDINGS_REQUIRE_TRIAGE',
