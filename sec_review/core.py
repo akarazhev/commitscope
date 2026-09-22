@@ -70,6 +70,22 @@ def no_symlinks(path: Path) -> None:
     for part in (path, *path.parents):
         if part.is_symlink(): raise ReviewError(f'Refusing symbolic-link path: {part}')
 
+def protected_path_stat(path: Path, *, directory: bool=False, require_owner: bool=True) -> os.stat_result:
+    """Check operator-owned policy files and existing protected directories."""
+    no_symlinks(path)
+    try:
+        state = os.stat(path, follow_symlinks=False)
+    except OSError as e:
+        raise ReviewError(f'Cannot inspect protected path: {path}: {e}') from e
+    expected_type = stat.S_ISDIR if directory else stat.S_ISREG
+    if not expected_type(state.st_mode):
+        raise ReviewError(f'Protected path is not a regular {"directory" if directory else "file"}: {path}')
+    if require_owner and state.st_uid not in (0, os.getuid()):
+        raise ReviewError(f'Protected path must be owned by the current user or root: {path}')
+    if state.st_mode & (stat.S_IWGRP | stat.S_IWOTH):
+        raise ReviewError(f'Protected path must not be group/world writable: {path}')
+    return state
+
 def trusted_internal_temp_path(path: Path) -> Path:
     """Canonicalize only operator/test-created paths that remain inside tempfile's root."""
     try:

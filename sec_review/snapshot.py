@@ -26,6 +26,14 @@ def resolve(repo: Path, ref: str) -> str:
     if not re.fullmatch(r'[0-9a-f]{40}|[0-9a-f]{64}',sha): raise ReviewError('Git did not return a full commit ID')
     return sha
 
+def resolve_exact_commit(repo: Path, ref: str) -> str:
+    if not isinstance(ref, str) or not re.fullmatch(r'[0-9a-f]{40}|[0-9a-f]{64}', ref):
+        raise ReviewError('Corporate review requires a full lowercase 40- or 64-character commit ID')
+    sha = resolve(repo, ref)
+    if sha != ref:
+        raise ReviewError('Resolved commit does not match the requested commit ID')
+    return sha
+
 def export_snapshot(repo: Path, dest: Path, ref: str='HEAD', base: str | None=None,
                     require_clean: bool=True, max_bytes: int=250*1024*1024) -> dict:
     repo=repo.resolve()

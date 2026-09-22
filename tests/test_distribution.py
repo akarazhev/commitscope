@@ -80,6 +80,11 @@ class DistributionTests(unittest.TestCase):
             "share/commitscope/prompts": {
                 resource for resource in tracked_runtime_resources() if resource.startswith("prompts/")
             },
+            "share/commitscope/examples": {
+                resource
+                for resource in tracked_runtime_resources()
+                if Path(resource).parent == Path("examples")
+            },
             "share/commitscope/examples/fixed": {
                 resource
                 for resource in tracked_runtime_resources()

@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CommitScope Corporate Review Policy",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "owner", "scope", "threat_model", "invariants", "fail_threshold", "code_upload"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "owner": {"$ref": "#/$defs/nonemptyString"},
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["description", "include", "exclude"],
+      "properties": {
+        "description": {"$ref": "#/$defs/nonemptyString"},
+        "include": {"$ref": "#/$defs/globs"},
+        "exclude": {"$ref": "#/$defs/globs"}
+      }
+    },
+    "threat_model": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["assets", "attackers", "trust_boundaries"],
+      "properties": {
+        "assets": {"$ref": "#/$defs/strings"},
+        "attackers": {"$ref": "#/$defs/strings"},
+        "trust_boundaries": {"$ref": "#/$defs/strings"}
+      }
+    },
+    "invariants": {
+      "type": "array",
+      "minItems": 1,
+      "$comment": "Invariant IDs must be unique; enforced by the runtime validator.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "statement"],
+        "properties": {
+          "id": {"$ref": "#/$defs/nonemptyString"},
+          "statement": {"$ref": "#/$defs/nonemptyString"}
+        }
+      }
+    },
+    "fail_threshold": {"enum": ["low", "medium", "high", "critical"]},
+    "code_upload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["allowed", "max_files", "max_bytes"],
+      "properties": {
+        "allowed": {"const": true},
+        "max_files": {"type": "integer", "minimum": 1, "maximum": 500},
+        "max_bytes": {"type": "integer", "minimum": 1, "maximum": 5000000}
+      }
+    }
+  },
+  "$defs": {
+    "nonemptyString": {"type": "string", "minLength": 1, "pattern": "\\S"},
+    "strings": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/nonemptyString"}},
+    "globs": {
+      "type": "array",
+      "minItems": 1,
+      "$comment": "Runtime validation also requires safe relative POSIX paths and valid glob character classes.",
+      "items": {"$ref": "#/$defs/nonemptyString"}
+    }
+  }
+}

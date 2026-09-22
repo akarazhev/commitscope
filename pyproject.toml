@@ -48,6 +48,7 @@ version = {attr = "sec_review.__version__"}
   "config/hunter.schema.json",
   "config/project-context.md",
   "config/resource-manifest.json",
+  "config/review-policy.schema.json",
   "config/sdist-manifest.json",
   "config/semgrep.yaml",
   "config/tools.lock.json",
@@ -57,6 +58,9 @@ version = {attr = "sec_review.__version__"}
 "share/commitscope/prompts" = [
   "prompts/hunter.md",
   "prompts/verifier.md",
+]
+"share/commitscope/examples" = [
+  "examples/review-policy.json",
 ]
 "share/commitscope/examples/fixed" = [
   "examples/fixed/Dockerfile",

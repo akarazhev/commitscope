@@ -26,8 +26,12 @@
       "sha256": "f71e436ce62a86a3fb314251b06f2740406b8105d5e109de1e85b657b5c09e18"
     },
     {
+      "path": "config/review-policy.schema.json",
+      "sha256": "61c597a0c75e98a15139f34035c31d625841ba9cce1aae45413ede51f0561946"
+    },
+    {
       "path": "config/sdist-manifest.json",
-      "sha256": "95e25eaa2991e13793dd4aa75cde3a342b7dd76c2a0fc3f6be14349b0b5ba167"
+      "sha256": "b70f2c35fad59a05b8d12952044b18de3e491e557016752f886a202ff148336a"
     },
     {
       "path": "config/semgrep.yaml",
@@ -56,6 +60,10 @@
     {
       "path": "examples/fixed/requirements.txt",
       "sha256": "248ffa708f8fc9999bb15fd1bb96200db730276dc80403c40fc407b2648cf2ec"
+    },
+    {
+      "path": "examples/review-policy.json",
+      "sha256": "2c61b058cdf922c3e0f55d5dcbfec519f433cb36ec0be30f3dddd9d6e0976505"
     },
     {
       "path": "examples/vulnerable/Dockerfile",
