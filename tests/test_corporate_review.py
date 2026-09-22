@@ -37,6 +37,7 @@ class ReviewFixture(unittest.TestCase):
         self.absolute_scanner_paths = False
         self.assert_private_raw = False
         self.raw_secret = None
+        self.prepared_values = [('DO_NOT_SAVE_ACCOUNT@example.invalid', 'DO_NOT_SAVE_ID')] * 2
         self.original_execute = scanners.execute
 
     def request(self):
@@ -76,7 +77,7 @@ class ReviewFixture(unittest.TestCase):
         source = packet if stage == 'hunter' else packet['original_packet']
         self.assertEqual(source['head'], self.git('rev-parse', 'HEAD'))
         self.assertIn('app.py', [item['path'] for item in source['files']])
-        return ProcessResult(9 if self.claude_failure else 0,
+        return ProcessResult(9 if self.claude_failure is True or self.claude_failure == stage else 0,
                              json.dumps(envelope(self.hunter if stage == 'hunter' else self.verifier)),
                              'Synthetic diagnostic', .01)
 
@@ -85,10 +86,10 @@ class ReviewFixture(unittest.TestCase):
         stack.enter_context(patch('sec_review.project.current_tools_root', return_value=self.tools))
         stack.enter_context(patch('sec_review.scanners.execute', side_effect=self.scan_execute))
         stack.enter_context(patch('sec_review.ai.execute', side_effect=self.claude_execute))
-        prepared = PreparedClaude('/synthetic/claude', {},
-                                  {'auth_mode': 'account', 'claude_version': '2.1.999'},
-                                  ('DO_NOT_SAVE_ACCOUNT@example.invalid', 'DO_NOT_SAVE_ID'))
-        stack.enter_context(patch('sec_review.ai.prepare_account_claude', return_value=prepared))
+        prepared = [PreparedClaude('/synthetic/claude', {},
+                                  {'auth_mode': 'account', 'claude_version': '2.1.999'}, values)
+                    for values in self.prepared_values]
+        stack.enter_context(patch('sec_review.ai.prepare_account_claude', side_effect=prepared))
         return stack
 
     def run_review(self):
@@ -238,6 +239,76 @@ class CorporateReviewTests(ReviewFixture):
         with patch('sec_review.project.save_reports') as save:
             self.assertEqual(self.run_review()['decision']['exit_code'], 0)
         save.assert_not_called()
+
+    def test_crlf_policy_preserves_original_bytes_and_verifies(self):
+        from sec_review.manifest import verify_review
+        original = self.policy_path.read_bytes().replace(b'\n', b'\r\n')
+        self.policy_path.write_bytes(original)
+        report = self.run_review()
+        self.assertEqual(report['decision']['exit_code'], 0, report)
+        self.assertEqual((self.out / 'evidence/policy.json').read_bytes(), original)
+        self.assertEqual(verify_review(self.out)[0], 0)
+
+    def test_both_auth_identities_are_removed_from_all_artifacts_even_on_verifier_failure(self):
+        from sec_review.manifest import verify_review
+        self.prepared_values = [('FIRST_PRIVATE_ACCOUNT_ID',), ('SECOND_PRIVATE_ACCOUNT_ID',)]
+        self.extra_scanner_text = 'Finding: FIRST_PRIVATE_ACCOUNT_ID and SECOND_PRIVATE_ACCOUNT_ID'
+        for failure, code in ((False, 1), ('verifier', 2)):
+            with self.subTest(failure=failure):
+                self.out = self.root / str(failure)
+                self.events.clear()
+                self.claude_failure = failure
+                report = self.run_review()
+                self.assertEqual(report['decision']['exit_code'], code)
+                for path in self.out.rglob('*'):
+                    if path.is_file():
+                        for value in ('FIRST_PRIVATE_ACCOUNT_ID', 'SECOND_PRIVATE_ACCOUNT_ID'):
+                            self.assertNotIn(value, path.read_text(), path)
+                self.assertEqual(verify_review(self.out)[0], code)
+
+    def test_sensitive_source_files_are_omitted_and_remaining_source_verifies(self):
+        from sec_review.manifest import verify_review
+        self.prepared_values = [('FIRST_PRIVATE_ACCOUNT_ID',), ('SECOND_PRIVATE_ACCOUNT_ID',)]
+        for name, value in (('first.py', 'FIRST_PRIVATE_ACCOUNT_ID'), ('second.py', 'SECOND_PRIVATE_ACCOUNT_ID')):
+            (self.repo / name).write_text('# ' + value + '\npass\n')
+        self.git('add', '.'); self.git('commit', '-qm', 'synthetic sensitive sources')
+        report = self.run_review()
+        self.assertEqual(report['decision']['exit_code'], 0, report)
+        packet = read_json(self.out / 'private/ai-input/packet.json')
+        self.assertEqual([item['path'] for item in packet['files']], ['app.py'])
+        omitted = {item['path']: item['reason'] for item in packet['omitted']}
+        for name in ('first.py', 'second.py'):
+            self.assertIn('sensitive', omitted[name])
+        self.assertEqual(packet['source_bytes'], sum(len(item['content'].encode()) for item in packet['files']))
+        self.assertEqual(report['ai']['omitted_files'], packet['omitted'])
+        self.assertEqual(verify_review(self.out)[0], 0)
+
+    def test_sensitive_scanner_protocol_collision_is_incomplete_without_rewriting_finding(self):
+        self.extra_scanner_text = 'Synthetic finding'
+        for key, value in (('severity', 'high'), ('path', 'app.py'), ('tool', 'semgrep'),
+                           ('status', 'scanner_finding'), ('rule_id', 'synthetic')):
+            with self.subTest(key=key):
+                self.out = self.root / key
+                self.events.clear()
+                self.prepared_values = [(value,), (value,)]
+                report = self.run_review()
+                self.assertEqual(report['decision']['exit_code'], 2, report)
+                self.assertEqual(len(report['findings']), 1)
+                self.assertEqual(report['findings'][0][key], value)
+
+    def test_late_policy_identity_collision_is_sanitized_and_incomplete(self):
+        from sec_review.manifest import verify_review
+        policy = read_json(self.policy_path)
+        policy['owner'] = 'Application Security SECOND_PRIVATE_ACCOUNT_ID'
+        write_json(self.policy_path, policy)
+        self.prepared_values = [('FIRST_PRIVATE_ACCOUNT_ID',), ('SECOND_PRIVATE_ACCOUNT_ID',)]
+        report = self.run_review()
+        self.assertEqual(report['decision']['exit_code'], 2, report)
+        self.assertIn('policy', report['error'].lower())
+        for path in self.out.rglob('*'):
+            if path.is_file():
+                self.assertNotIn('SECOND_PRIVATE_ACCOUNT_ID', path.read_text(), path)
+        self.assertEqual(verify_review(self.out)[0], 2)
 
 
 if __name__ == '__main__':

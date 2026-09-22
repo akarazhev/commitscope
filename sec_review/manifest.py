@@ -139,6 +139,7 @@ def _check_scanners(run: Path, report: dict) -> list:
     parsed = []
     for scan in report['scanners']:
         name = scan['name']
+        _require(scan['raw_privacy'] == 'privacy_redacted', 'Scanner privacy metadata is missing')
         relative = f'private/scanners/{name}.json'
         _require(scan['raw_report'] == relative and scan['raw_sha256'] == file_hash(run / relative),
                  'Raw scanner evidence hash mismatch')
@@ -192,8 +193,7 @@ def _check_ai(run: Path, report: dict, policy: dict, scanner_findings: list) -> 
         seen.add(path)
         _require(type(item['line_count']) is int and item['line_count'] == max(1, len(item['content'].splitlines())),
                  'Invalid packet line count')
-        if '[REDACTED_' not in item['content']:
-            _require(digest(item['content'].encode()) == entries[path]['sha256'], 'Packet source differs from snapshot')
+        _require(digest(item['content'].encode()) == entries[path]['sha256'], 'Packet source differs from snapshot')
     for item in packet['omitted']:
         path = safe_path(item['path']).as_posix()
         _require(path not in seen and isinstance(item['reason'], str) and bool(item['reason']), 'Invalid packet omissions')

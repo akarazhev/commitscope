@@ -150,12 +150,15 @@ def output_claim_is_current(claim: OutputClaim) -> bool:
     return True
 
 def write_text(path: Path, text: str) -> None:
+    write_bytes(path, text.encode('utf-8'))
+
+def write_bytes(path: Path, data: bytes) -> None:
     no_symlinks(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     fd,tmp=tempfile.mkstemp(prefix='.write-',dir=path.parent)
     try:
-        with os.fdopen(fd,'w',encoding='utf-8') as f:
-            f.write(text); f.flush(); os.fsync(f.fileno())
+        with os.fdopen(fd,'wb') as f:
+            f.write(data); f.flush(); os.fsync(f.fileno())
         os.replace(tmp,path)
         path.chmod(0o600)
     finally:

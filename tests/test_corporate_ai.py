@@ -343,7 +343,7 @@ class CorporatePrivacyTests(CorporateFixture):
                     self.assert_private(read_json(path))
 
     def test_privacy_success_sanitizes_packet_reports_evidence_and_logs(self):
-        (self.source / 'app.py').write_text('pass\n# ' + self.echo + '\n')
+        (self.source / 'withheld.py').write_text('pass\n# ' + self.echo + '\n')
         self.policy['owner'] = 'Application Security: ' + self.sensitive[0]
         original_scanner = copy.deepcopy(self.report['findings'][0])
         self.config['hunter_raw'] = json.dumps(self.config['hunter']).replace('synthetic.account',
@@ -359,6 +359,23 @@ class CorporatePrivacyTests(CorporateFixture):
             if call['stdin'] is not None:
                 self.assert_private(json.loads(call['stdin']))
         self.assertIn('Safe diagnostic;', (self.out / 'private/model-logs/hunter.log').read_text())
+        packet = read_json(self.out / 'private/ai-input/packet.json')
+        self.assertNotIn('withheld.py', [item['path'] for item in packet['files']])
+
+    def test_all_source_withheld_for_sensitive_content_prevents_model_call(self):
+        (self.source / 'app.py').write_text('# ' + self.echo + '\n')
+        result = self.run_review(environment=self.environment)
+        self.assertEqual(result['ai']['status'], 'failed')
+        self.assertFalse(any('-p' in call['argv'] for call in self.calls()))
+
+    def test_late_source_omission_invalidates_hunter_before_verifier(self):
+        (self.source / 'app.py').write_text('# LATE_SOURCE_ID\npass\n')
+        (self.source / 'other.py').write_text('pass\n')
+        self.config['verifier_auth'] = {**self.config['auth'], 'accountUuid': 'LATE_SOURCE_ID'}
+        result = self.run_review(environment=self.environment)
+        self.assertEqual(result['ai']['status'], 'failed')
+        self.assertEqual(len([call for call in self.calls() if '-p' in call['argv']]), 1)
+        self.assertNotIn('hunter', result['ai'])
 
     def test_privacy_enum_collision_preserves_existing_scanner_and_threshold_count(self):
         self.environment['http_proxy'] = 'http://high:extra-password@proxy.invalid:3128'

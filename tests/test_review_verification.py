@@ -139,3 +139,12 @@ class ReviewVerificationTests(ReviewFixture):
         self.scanner_failure = 'gitleaks'
         self.run_review()
         self.verify(2)
+
+    def test_redaction_marker_does_not_bypass_packet_source_hash(self):
+        self.run_review()
+        def change(packet):
+            packet['files'][0]['content'] = '# [REDACTED_CORPORATE] unrelated replacement\n'
+            packet['files'][0]['line_count'] = 1
+            packet['source_bytes'] = len(packet['files'][0]['content'].encode())
+        self.mutate('private/ai-input/packet.json', change)
+        self.verify(2)

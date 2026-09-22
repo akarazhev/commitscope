@@ -331,11 +331,19 @@ def validate_corporate_verifier(obj: dict, ids: list[str]) -> None:
 
 def _redact_corporate_packet(packet: dict, sensitive_values: set[str], max_bytes: int) -> dict:
     clean = redact_corporate_value(packet, sensitive_values, redact_keys=False)
+    files = []
     for original, item in zip(packet['files'], clean['files']):
         if original['path'] != item['path']:
             raise ReviewError('Corporate privacy redaction would change a supplied source path.')
-        if item['line_count'] != max(1, len(item['content'].splitlines())):
-            raise ReviewError('Corporate privacy redaction changes source line boundaries.')
+        if original['content'] != item['content']:
+            clean['omitted'].append({'path': original['path'],
+                                     'reason': 'sensitive account or credential material; whole file withheld'})
+        else:
+            files.append(original.copy())
+    for original, item in zip(packet['omitted'], clean['omitted']):
+        if original['path'] != item['path']:
+            raise ReviewError('Corporate privacy redaction would change an omitted source path.')
+    clean['files'] = files
     # Scanner text is copied and sanitized for upload; its normalized protocol
     # fields retain their meaning. The caller's scanner objects are never edited.
     scanner_constants = {
@@ -379,12 +387,15 @@ def _redact_corporate_result(envelope: dict, stage: str, model: str, packet: dic
 
 
 def run_corporate_ai(source: Path, report: dict, policy: dict, out: Path, *,
-                     model: str, timeout: int, max_turns: int) -> dict:
+                     model: str, timeout: int, max_turns: int,
+                     _sensitive_values: set[str] | None = None) -> dict:
     """Review the exported snapshot through independent account-only CLI processes."""
     report['ai'] = {'requested': True, 'status': 'running', 'auth_mode': 'account',
                     'started_at': now(), 'stages': {}}
     state = report['ai']
-    sensitive_values, artifacts, results = set(), {}, {}
+    # This caller-owned sink stays in memory; never attach auth values to reports.
+    sensitive_values = _sensitive_values if _sensitive_values is not None else set()
+    artifacts, results = {}, {}
     stage, packet = None, None
     try:
         sensitive_values.update(corporate_sensitive_values(os.environ))
@@ -411,6 +422,8 @@ def run_corporate_ai(source: Path, report: dict, policy: dict, out: Path, *,
                     private_dir(out / 'evidence')
                     state['authentication'] = stage_state['authentication']
                 packet = _redact_corporate_packet(packet, sensitive_values, policy['code_upload']['max_bytes'])
+                if not packet['files']:
+                    raise ReviewError('No source files remain after sensitive material was withheld.')
                 if stage == 'verifier':
                     previous = results.pop('hunter')
                     results['hunter'] = _redact_corporate_result(previous, 'hunter', model, packet, [], sensitive_values)
