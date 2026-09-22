@@ -126,6 +126,25 @@ class ResourceManifestTests(unittest.TestCase):
 
             self.assertEqual(validate_resource_root(root), root)
 
+    def test_symlinked_cache_directory_is_rejected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            root = write_resource_root(base / "root")
+            outside = base / "outside-cache"
+            outside.mkdir()
+            (root / "config/__pycache__").symlink_to(outside, target_is_directory=True)
+
+            with self.assertRaises(ReviewError):
+                validate_resource_root(root)
+
+    def test_dangling_bytecode_symlink_is_rejected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = write_resource_root(Path(directory).resolve())
+            (root / "config/ignored.pyc").symlink_to(root / "missing.pyc")
+
+            with self.assertRaises(ReviewError):
+                validate_resource_root(root)
+
     def test_loader_rejects_unknown_keys_duplicate_paths_and_unsafe_paths(self):
         invalid_manifests = (
             {

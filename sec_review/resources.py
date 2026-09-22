@@ -46,12 +46,13 @@ def validate_resource_root(root: Path) -> Path:
         if not directory.is_dir():
             raise ReviewError(f"Resource directory is missing: {directory_name}")
         for path in directory.rglob("*"):
-            relative = path.relative_to(root).as_posix()
-            if "__pycache__" in path.relative_to(root).parts:
+            relative_path = path.relative_to(root)
+            relative = relative_path.as_posix()
+            no_symlinks(path)
+            if "__pycache__" in relative_path.parts:
                 continue
             if path.suffix == ".pyc" or relative == RESOURCE_MANIFEST:
                 continue
-            no_symlinks(path)
             if path.is_dir():
                 continue
             if not path.is_file():
