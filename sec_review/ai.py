@@ -329,22 +329,70 @@ def validate_corporate_verifier(obj: dict, ids: list[str]) -> None:
         raise ReviewError('Invalid corporate Verifier verdict array')
 
 
+def _redact_corporate_packet(packet: dict, sensitive_values: set[str], max_bytes: int) -> dict:
+    clean = redact_corporate_value(packet, sensitive_values, redact_keys=False)
+    for original, item in zip(packet['files'], clean['files']):
+        if original['path'] != item['path']:
+            raise ReviewError('Corporate privacy redaction would change a supplied source path.')
+        if item['line_count'] != max(1, len(item['content'].splitlines())):
+            raise ReviewError('Corporate privacy redaction changes source line boundaries.')
+    # Scanner text is copied and sanitized for upload; its normalized protocol
+    # fields retain their meaning. The caller's scanner objects are never edited.
+    scanner_constants = {
+        'severity': {'critical', 'high', 'medium', 'low', 'info', 'unknown'},
+        'status': {'scanner_finding', 'ai_hypothesis'},
+        'tool': {'semgrep', 'gitleaks', 'trivy', 'claude'},
+    }
+    for original, item in zip(packet['scanner_findings'], clean['scanner_findings']):
+        for key, allowed in scanner_constants.items():
+            if isinstance(original.get(key), str) and original[key] in allowed:
+                item[key] = original[key]
+    clean['source_bytes'] = sum(len(item['content'].encode('utf-8')) for item in clean['files'])
+    if clean['source_bytes'] > max_bytes:
+        raise ReviewError('Redacted corporate source exceeds the source byte budget.')
+    return clean
+
+
+def _redact_corporate_result(envelope: dict, stage: str, model: str, packet: dict,
+                             ids: list[str], sensitive_values: set[str]) -> dict:
+    value = corporate_structured(json.dumps(envelope, allow_nan=False), model)
+
+    def validate(result: dict) -> None:
+        if stage == 'hunter':
+            validate_corporate_hunter(result, packet)
+        else:
+            validate_corporate_verifier(result, ids)
+
+    validate(value)
+    clean = redact_corporate_value(value, sensitive_values, redact_keys=False)
+    validate(clean)
+    # Keep validated schema keys and envelope constants, not arbitrary model
+    # strings. Decision values must remain valid after sanitization as well.
+    protocol = {'subtype', 'is_error', 'modelUsage', 'structured_output'}
+    result = redact_corporate_value({key: item for key, item in envelope.items() if key not in protocol},
+                                    sensitive_values)
+    result.update(subtype='success', is_error=False,
+                  modelUsage={model: redact_corporate_value(envelope['modelUsage'][model], sensitive_values)},
+                  structured_output=clean)
+    corporate_structured(json.dumps(result, allow_nan=False), model)
+    return result
+
+
 def run_corporate_ai(source: Path, report: dict, policy: dict, out: Path, *,
                      model: str, timeout: int, max_turns: int) -> dict:
     """Review the exported snapshot through independent account-only CLI processes."""
     report['ai'] = {'requested': True, 'status': 'running', 'auth_mode': 'account',
-                    'model_requested': model, 'max_turns_per_call': max_turns,
-                    'timeout_seconds_per_call': timeout, 'started_at': now(), 'stages': {}}
+                    'started_at': now(), 'stages': {}}
     state = report['ai']
-    sensitive_values, artifacts = set(), {}
-    stage = None
+    sensitive_values, artifacts, results = set(), {}, {}
+    stage, packet = None, None
     try:
         sensitive_values.update(corporate_sensitive_values(os.environ))
         validate_exact_model(model)
         validate_ai_options('subscription', None, max_turns, timeout)
+        state.update(model_requested=model, max_turns_per_call=max_turns, timeout_seconds_per_call=timeout)
         _validate_policy(policy)
         _require_secret_scan(report)
-        packet = None
         for stage in ('hunter', 'verifier'):
             stage_state = {'status': 'running', 'started_at': now()}
             state['stages'][stage] = stage_state
@@ -362,26 +410,19 @@ def run_corporate_ai(source: Path, report: dict, policy: dict, out: Path, *,
                         private_dir(out / 'private' / name)
                     private_dir(out / 'evidence')
                     state['authentication'] = stage_state['authentication']
-                packet = redact_corporate_value(packet, sensitive_values)
-                if any(item['line_count'] != max(1, len(item['content'].splitlines())) for item in packet['files']):
-                    raise ReviewError('Corporate privacy redaction changes source line boundaries.')
-                packet['source_bytes'] = sum(len(item['content'].encode('utf-8')) for item in packet['files'])
-                if packet['source_bytes'] > policy['code_upload']['max_bytes']:
-                    raise ReviewError('Redacted corporate source exceeds the source byte budget.')
-                artifacts['private/ai-input/packet.json'] = packet
-                state['omitted_files'] = packet['omitted']
+                packet = _redact_corporate_packet(packet, sensitive_values, policy['code_upload']['max_bytes'])
                 if stage == 'verifier':
-                    state['hunter'] = redact_corporate_value(state['hunter'], sensitive_values)
-                    validate_corporate_hunter(state['hunter'], packet)
+                    previous = results.pop('hunter')
+                    results['hunter'] = _redact_corporate_result(previous, 'hunter', model, packet, [], sensitive_values)
                 payload = packet if stage == 'hunter' else {
-                    'original_packet': packet, 'candidates': state['hunter']['findings']}
+                    'original_packet': packet, 'candidates': results['hunter']['structured_output']['findings']}
                 result = execute(corporate_claude_command(prepared.executable, stage, model, max_turns),
                                  work, prepared.env, timeout, json.dumps(payload, allow_nan=False))
                 stage_state['seconds'] = result.seconds
-                artifacts[f'private/model-logs/{stage}.log'] = redact_corporate(result.stderr, sensitive_values)
+                artifacts[f'private/model-logs/{stage}.log'] = result.stderr
                 try:
-                    envelope = redact_corporate_value(decode_json(result.stdout), sensitive_values)
-                    stdout = json.dumps(envelope, ensure_ascii=False, allow_nan=False)
+                    envelope = decode_json(result.stdout)
+                    json.dumps(envelope, allow_nan=False)
                 except (ReviewError, ValueError, TypeError, RecursionError):
                     artifacts[f'private/model-output/{stage}.json'] = {
                         'error': 'Invalid model output withheld for privacy.'}
@@ -389,14 +430,40 @@ def run_corporate_ai(source: Path, report: dict, policy: dict, out: Path, *,
                 artifacts[f'private/model-output/{stage}.json'] = envelope
                 if result.code != 0 or result.timed_out or result.truncated:
                     raise ReviewError(f'Claude {stage} failed (nonzero exit, timeout or truncated output); no fallback.')
-                value = corporate_structured(stdout, model)
-                if stage == 'hunter':
-                    validate_corporate_hunter(value, packet)
-                else:
-                    validate_corporate_verifier(value, [item['id'] for item in state['hunter']['findings']])
-                state[stage] = value
-                artifacts[f'evidence/{stage}.json'] = value
+                ids = [item['id'] for item in results['hunter']['structured_output']['findings']] if stage == 'verifier' else []
+                results[stage] = _redact_corporate_result(envelope, stage, model, packet, ids, sensitive_values)
                 stage_state.update(status='complete', finished_at=now(), model=model)
+        state.update(status='complete', finished_at=now())
+    except (ReviewError, OSError, KeyError, ValueError, TypeError, RecursionError) as error:
+        if stage in state['stages']:
+            state['stages'][stage].update(status='failed', finished_at=now())
+        state.update(status='failed', finished_at=now(), error=redact_corporate(str(error), sensitive_values))
+    # Account status is checked independently for each stage. Delay persistence so
+    # identifiers learned in either stage are removed from every saved artifact.
+    try:
+        validated_outputs = {f'private/model-output/{name}.json' for name in results}
+        clean_artifacts = {relative: redact_corporate_value(value, sensitive_values)
+                           for relative, value in artifacts.items() if relative not in validated_outputs}
+        if packet is not None:
+            packet = _redact_corporate_packet(packet, sensitive_values, policy['code_upload']['max_bytes'])
+            clean_artifacts['private/ai-input/packet.json'] = packet
+            state['omitted_files'] = packet['omitted']
+        for result_stage in ('hunter', 'verifier'):
+            if result_stage not in results:
+                continue
+            ids = [item['id'] for item in state['hunter']['findings']] if result_stage == 'verifier' else []
+            envelope = _redact_corporate_result(results[result_stage], result_stage, model, packet, ids, sensitive_values)
+            state[result_stage] = envelope['structured_output']
+            clean_artifacts[f'private/model-output/{result_stage}.json'] = envelope
+            clean_artifacts[f'evidence/{result_stage}.json'] = state[result_stage]
+        for relative, value in clean_artifacts.items():
+            if relative.endswith('.json'):
+                write_json(out / relative, value)
+            else:
+                write_text(out / relative, value)
+    except (ReviewError, OSError, ValueError, TypeError, RecursionError) as error:
+        state.update(status='failed', finished_at=now(), error=redact_corporate(str(error), sensitive_values))
+    if state['status'] == 'complete':
         verdicts = {item['finding_id']: item for item in state['verifier']['verdicts']}
         for item in state['hunter']['findings']:
             verdict = verdicts[item['id']]
@@ -408,30 +475,7 @@ def run_corporate_ai(source: Path, report: dict, policy: dict, out: Path, *,
                                  item['title'], **details, verifier=verdict)
             normalized['status'] = 'ai_hypothesis'
             report['findings'].append(normalized)
-        state.update(status='complete', finished_at=now(), summary=state['hunter']['summary'],
-                     limitations=state['hunter']['limitations'],
+        state.update(summary=state['hunter']['summary'], limitations=state['hunter']['limitations'],
                      warning='AI conclusions are advisory and not reproduced. Scanner findings are preserved. '
                              'Human triage and approval remain external.')
-    except (ReviewError, OSError, KeyError, ValueError, TypeError, RecursionError) as error:
-        if stage in state['stages']:
-            state['stages'][stage].update(status='failed', finished_at=now())
-        state.update(status='failed', finished_at=now(), error=redact_corporate(str(error), sensitive_values))
-    # Account status is checked independently for each stage. Delay persistence so
-    # identifiers learned in either stage are removed from every saved artifact.
-    # These values are public protocol constants, not auth-status identity text.
-    public_fields = frozenset({'status', 'auth_mode', 'auth_method', 'provider', 'claude_version'})
-    clean_report = redact_corporate_value(report, sensitive_values, redact_keys=False,
-                                         public_fields=public_fields)
-    report.clear()
-    report.update(clean_report)
-    try:
-        clean_artifacts = {relative: redact_corporate_value(value, sensitive_values)
-                           for relative, value in artifacts.items()}
-        for relative, value in clean_artifacts.items():
-            if relative.endswith('.json'):
-                write_json(out / relative, value)
-            else:
-                write_text(out / relative, value)
-    except (ReviewError, OSError, ValueError, TypeError, RecursionError) as error:
-        report['ai'].update(status='failed', finished_at=now(), error=redact_corporate(str(error), sensitive_values))
     return report

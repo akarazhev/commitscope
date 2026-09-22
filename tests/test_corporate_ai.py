@@ -345,20 +345,99 @@ class CorporatePrivacyTests(CorporateFixture):
     def test_privacy_success_sanitizes_packet_reports_evidence_and_logs(self):
         (self.source / 'app.py').write_text('pass\n# ' + self.echo + '\n')
         self.policy['owner'] = 'Application Security: ' + self.sensitive[0]
-        self.report['findings'][0]['title'] += '; ' + self.sensitive[1]
+        original_scanner = copy.deepcopy(self.report['findings'][0])
         self.config['hunter_raw'] = json.dumps(self.config['hunter']).replace('synthetic.account',
                                                                             r'synthetic.\u0061ccount')
         result = self.run_review(environment=self.environment)
         self.assertEqual(result['ai']['status'], 'complete', result['ai'])
         self.assert_private_result(result)
         self.assertTrue(result['ai']['summary'].startswith('Safe summary: '))
-        self.assertTrue(result['findings'][0]['title'].startswith('Scanner survives; '))
+        self.assertEqual(result['findings'][0], original_scanner)
         self.assertEqual(len(result['findings']), 3)
         self.assertTrue(result['findings'][1]['evidence'].startswith('Safe source evidence app.py:1; '))
         for call in self.calls():
             if call['stdin'] is not None:
                 self.assert_private(json.loads(call['stdin']))
         self.assertIn('Safe diagnostic;', (self.out / 'private/model-logs/hunter.log').read_text())
+
+    def test_privacy_enum_collision_preserves_existing_scanner_and_threshold_count(self):
+        self.environment['http_proxy'] = 'http://high:extra-password@proxy.invalid:3128'
+        self.report['findings'][0]['title'] += '; ' + self.sensitive[1]
+        scanner = self.report['findings'][0]
+        original = copy.deepcopy(scanner)
+        original_bytes = json.dumps(scanner).encode('utf-8')
+        original_report = copy.deepcopy(self.report)
+        self.config['hunter']['structured_output']['findings'] = []
+        self.config['verifier']['structured_output']['verdicts'] = []
+        result = self.run_review(environment=self.environment)
+        self.assertEqual(result['ai']['status'], 'complete', result['ai'])
+        self.assertIs(result['findings'][0], scanner)
+        self.assertEqual(result['findings'][0], original)
+        self.assertEqual(json.dumps(result['findings'][0]).encode('utf-8'), original_bytes)
+        self.assertEqual({key: value for key, value in result.items() if key != 'ai'}, original_report)
+        self.assertEqual(sum(item['severity'] in ('high', 'critical') for item in result['findings']), 1)
+        self.assert_private(result['ai'])
+        for path in self.out.rglob('*'):
+            if path.is_file():
+                self.assert_private(path.read_text())
+        packet = read_json(self.out / 'private/ai-input/packet.json')
+        self.assertEqual(packet['scanner_findings'][0]['severity'], 'high')
+        self.assertNotIn(self.sensitive[1], packet['scanner_findings'][0]['title'])
+
+    def test_privacy_new_decision_collision_fails_without_rewriting_scanner(self):
+        self.environment['http_proxy'] = 'http://high:extra-password@proxy.invalid:3128'
+        original = copy.deepcopy(self.report['findings'])
+        result = self.run_review(environment=self.environment)
+        self.assertEqual(result['ai']['status'], 'failed')
+        self.assertEqual(result['findings'], original)
+        self.assertNotIn('hunter', result['ai'])
+        self.assert_private_result(result)
+
+    def test_privacy_source_path_collision_fails_without_inventing_source_locations(self):
+        self.environment['http_proxy'] = 'http://app.py:extra-password@proxy.invalid:3128'
+        original = copy.deepcopy(self.report['findings'])
+        result = self.run_review(environment=self.environment)
+        self.assertEqual(result['ai']['status'], 'failed')
+        self.assertEqual(result['findings'], original)
+        self.assertNotIn('hunter', result['ai'])
+        self.assertFalse(any('-p' in call['argv'] for call in self.calls()))
+
+    def test_privacy_late_decision_collision_discards_invalid_prior_hunter(self):
+        self.config['verifier_auth'] = {**self.config['auth'], 'accountUuid': 'AI-001'}
+        result = self.run_review(environment=self.environment)
+        self.assertEqual(result['ai']['status'], 'failed')
+        self.assertNotIn('hunter', result['ai'])
+        self.assertEqual(len(result['findings']), 1)
+        self.assert_private_result(result)
+        self.assertNotIn('AI-001', json.dumps(result['ai']))
+        for path in self.out.rglob('*'):
+            if path.is_file():
+                self.assertNotIn('AI-001', path.read_text())
+        evidence = self.out / 'evidence/hunter.json'
+        self.assertFalse(evidence.exists(), 'Invalidated Hunter evidence must not remain normalized evidence')
+
+    def test_privacy_preserves_validated_model_protocol_fields(self):
+        original_report = copy.deepcopy(self.report)
+        for credential in ('severity', 'success', MODEL):
+            with self.subTest(credential=credential):
+                self.report = copy.deepcopy(original_report)
+                self.environment['http_proxy'] = 'http://' + credential + ':extra-password@proxy.invalid:3128'
+                result = self.run_review(environment=self.environment)
+                self.assertEqual(result['ai']['status'], 'complete', result['ai'])
+                self.assertEqual(result['ai']['model_requested'], MODEL)
+                self.assert_private_result(result)
+                for stage in ('hunter', 'verifier'):
+                    saved = read_json(self.out / f'private/model-output/{stage}.json')
+                    self.assertEqual(saved['subtype'], 'success')
+                    self.assertEqual(set(saved['modelUsage']), {MODEL})
+
+    def test_privacy_does_not_merge_validated_schema_keys_that_match_credentials(self):
+        self.environment['http_proxy'] = 'http://severity:path@proxy.invalid:3128'
+        result = self.run_review(environment=self.environment)
+        self.assertEqual(result['ai']['status'], 'complete', result['ai'])
+        self.assertEqual(result['ai']['hunter']['findings'][0]['severity'], 'high')
+        self.assertEqual(result['ai']['hunter']['findings'][0]['path'], 'app.py')
+        self.assert_private_result(result)
 
     def test_privacy_nonzero_and_malformed_responses_withhold_sensitive_raw_output(self):
         for failure in ('nonzero', 'malformed', 'duplicate'):
