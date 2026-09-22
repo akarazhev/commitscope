@@ -9,3 +9,6 @@ reports/
 docs/security-review-pdfs/
 .worktrees/
 .superpowers/
+build/
+dist/
+*.egg-info/
