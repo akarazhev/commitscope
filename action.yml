@@ -2,7 +2,7 @@ name: CommitScope Security Review
 description: Run CommitScope scanner checks and expose normalized report paths.
 inputs:
   repo:
-    description: Existing Git checkout within the caller workspace.
+    description: Existing Git checkout within the caller workspace or runner temp.
     required: false
     default: ''
   ref:

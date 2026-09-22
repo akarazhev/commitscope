@@ -23,10 +23,26 @@ class AcceptanceTests(unittest.TestCase):
         self.assertIn('pipx install "git+https://github.com/akarazhev/commitscope.git@v2.3.0"', readme)
         self.assertIn('uses: akarazhev/commitscope@v2.3.0', workflow)
         self.assertIn('persist-credentials: false', workflow)
-        self.assertIn('if: always()', workflow)
+        self.assertIn('security-events: write', workflow)
+        self.assertIn('submodules: false', workflow)
+        self.assertIn('lfs: false', workflow)
+        self.assertIn('repo: ${{ github.workspace }}', workflow)
+        self.assertIn('ref: ${{ github.sha }}', workflow)
+        self.assertEqual(workflow.count('if: always()'), 2)
         self.assertIn('ea165f8d65b6e75b540449e92b4886f43607fa02', workflow)
         self.assertIn('3ea06614dafe36dec890db3446326e0d40ce53d4', workflow)
         self.assertNotIn('--allow-code-upload', workflow)
+    def test_ci_verifies_clean_package_and_consumer_action(self):
+        workflow = (ROOT / '.github/workflows/verify.yml').read_text()
+        for expected in (
+            'name: Package install (${{ matrix.os }}, Python ${{ matrix.python-version }})',
+            'python -m build',
+            'commitscope demo --app-only',
+            'name: Consumer action (ubuntu-24.04, Python 3.14)',
+            'uses: ./',
+            'report.sarif',
+        ):
+            self.assertIn(expected, workflow)
     def test_report_driver_uses_public_brand(self):
         from sec_review.reports import sarif
         r={'findings':[]}

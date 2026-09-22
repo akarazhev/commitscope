@@ -33,6 +33,17 @@ class ActionTests(unittest.TestCase):
             self.assertNotIn(values.repo, values.out.parents)
             self.assertTrue(values.out.is_relative_to(base / 'runner'))
 
+    def test_runner_temp_subject_repo_is_allowed_for_live_consumer_ci(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            env = self.environment(base)
+            subject = base / 'runner' / 'subject'
+            subject.mkdir()
+            env['INPUT_REPO'] = str(subject)
+            values = parse_action_inputs(env)
+            self.assertEqual(values.repo, subject)
+            self.assertTrue(values.out.is_relative_to(base / 'runner'))
+
     def test_invalid_scalar_inputs_fail_before_cli(self):
         mutations = {
             'INPUT_FAIL_ON': 'urgent', 'INPUT_TIMEOUT': '29',

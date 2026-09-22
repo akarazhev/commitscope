@@ -51,6 +51,16 @@ def _inside(path: Path, parent: Path, label: str) -> None:
         raise ReviewError(f'{label} escapes its allowed GitHub runner directory') from error
 
 
+def _inside_one_of(path: Path, parents: tuple[Path, ...], label: str) -> None:
+    for parent in parents:
+        try:
+            path.relative_to(parent)
+            return
+        except ValueError:
+            pass
+    raise ReviewError(f'{label} escapes its allowed GitHub runner directories')
+
+
 def parse_action_inputs(environ: Mapping[str, str]) -> ActionInputs:
     workspace_text = _required(environ, 'GITHUB_WORKSPACE')
     runner_text = _required(environ, 'RUNNER_TEMP')
@@ -68,7 +78,7 @@ def parse_action_inputs(environ: Mapping[str, str]) -> ActionInputs:
         raw_repo = workspace / raw_repo
     no_symlinks(raw_repo)
     repo = _resolve_existing(raw_repo, 'repo')
-    _inside(repo, workspace, 'repo')
+    _inside_one_of(repo, (workspace, runner), 'repo')
 
     raw_out_text = environ.get('INPUT_OUT', '')
     _reject_control(raw_out_text, 'out')
