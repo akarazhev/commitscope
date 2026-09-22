@@ -1,3 +1,5 @@
+import hashlib
+import json
 import os
 from pathlib import Path
 import sys
@@ -12,16 +14,28 @@ from sec_review.paths import select_resource_root, select_tools_root, runs_root
 
 class RuntimePathTests(unittest.TestCase):
     def resources(self, root: Path) -> Path:
-        for relative in (
-            'config/tools.lock.json', 'config/semgrep.yaml',
-            'config/gitleaks.toml', 'config/trivy.yaml',
-            'prompts/hunter.md', 'prompts/verifier.md',
-            'examples/vulnerable/app.py', 'examples/fixed/app.py',
+        resources = (
+            'config/tools.lock.json', 'config/hunter.schema.json',
+            'config/claude-settings.json', 'config/claude.version',
+            'config/empty-mcp.json', 'config/sdist-manifest.json',
+            'prompts/hunter.md', 'examples/vulnerable/app.py',
             'tests/test_demo_app.py',
-        ):
+        )
+        for relative in resources:
             path = root / relative
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text('{}' if path.suffix == '.json' else 'fixture')
+        manifest = {
+            'schema_version': '1.0',
+            'resources': [
+                {
+                    'path': relative,
+                    'sha256': hashlib.sha256((root / relative).read_bytes()).hexdigest(),
+                }
+                for relative in resources
+            ],
+        }
+        (root / 'config/resource-manifest.json').write_text(json.dumps(manifest))
         return root
 
     def test_source_resources_win_over_installed_share(self):

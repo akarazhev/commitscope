@@ -47,6 +47,8 @@ version = {attr = "sec_review.__version__"}
   "config/gitleaks.toml",
   "config/hunter.schema.json",
   "config/project-context.md",
+  "config/resource-manifest.json",
+  "config/sdist-manifest.json",
   "config/semgrep.yaml",
   "config/tools.lock.json",
   "config/trivy.yaml",

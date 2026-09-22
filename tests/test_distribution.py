@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 import os
 import runpy
@@ -14,24 +15,12 @@ from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-RESOURCE_ROOTS = ("config", "prompts", "examples")
-
 from sec_review import __version__
 
 
 def tracked_runtime_resources() -> set[str]:
-    listing = subprocess.run(
-        ["git", "ls-files", *RESOURCE_ROOTS, "tests/test_demo_app.py"],
-        cwd=ROOT,
-        check=True,
-        stdout=subprocess.PIPE,
-        text=True,
-    )
-    return {
-        line
-        for line in listing.stdout.splitlines()
-        if line.startswith(RESOURCE_ROOTS) or line == "tests/test_demo_app.py"
-    }
+    manifest = json.loads((ROOT / "config/resource-manifest.json").read_text())
+    return {entry["path"] for entry in manifest["resources"]}
 
 
 class DistributionTests(unittest.TestCase):
@@ -71,7 +60,10 @@ class DistributionTests(unittest.TestCase):
             for item in values
         }
 
-        self.assertEqual(declared, tracked_runtime_resources())
+        self.assertEqual(
+            declared,
+            tracked_runtime_resources() | {"config/resource-manifest.json"},
+        )
 
     def test_wheel_data_destinations_preserve_relative_layout(self):
         metadata = self.project_metadata()
@@ -81,7 +73,9 @@ class DistributionTests(unittest.TestCase):
         }
         expected_destinations = {
             "share/commitscope/config": {
-                resource for resource in tracked_runtime_resources() if resource.startswith("config/")
+                resource
+                for resource in tracked_runtime_resources() | {"config/resource-manifest.json"}
+                if resource.startswith("config/")
             },
             "share/commitscope/prompts": {
                 resource for resource in tracked_runtime_resources() if resource.startswith("prompts/")
@@ -268,18 +262,31 @@ class DistributionTests(unittest.TestCase):
             self.assertEqual(cli.stdout.strip(), "2.3.0")
             self.assertEqual(module.stdout.strip(), "2.3.0")
 
-    def test_sdist_no_git_fallback_walks_sources_and_rejects_payload_symlinks(self):
+    def test_sdist_no_git_fallback_uses_exact_manifest_and_rejects_allowlisted_symlink(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             clean = root / "clean"
             shutil.copytree(ROOT, clean, symlinks=True, ignore=shutil.ignore_patterns(".git", "__pycache__"))
 
+            forbidden = (
+                ".env", ".env.production", "credentials.json",
+                "reports/raw/semgrep.json", ".runs/old/report.json",
+                ".tools/bin/gitleaks", ".idea/workspace.xml", "scratch.tmp",
+            )
+            for relative in forbidden:
+                path = clean / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text("FORBIDDEN")
+
             script = (
-                "from pathlib import Path; import sys, tarfile; sys.path.insert(0, str(Path.cwd())); "
+                "from pathlib import Path; import json, sys, tarfile; sys.path.insert(0, str(Path.cwd())); "
                 "import sec_review_build; "
                 "path = Path('dist') / sec_review_build.build_sdist('dist'); "
-                "entries = set(tarfile.open(path, 'r:gz').getnames()); "
-                "assert 'commitscope-2.3.0/sec_review/cli.py' in entries"
+                "entries = tarfile.open(path, 'r:gz').getnames(); "
+                "prefix = 'commitscope-2.3.0/'; "
+                "declared = json.loads(Path('config/sdist-manifest.json').read_text())['files']; "
+                "assert all(entries.count(prefix + item) == 1 for item in declared); "
+                "assert not any(prefix + item in entries for item in " + repr(forbidden) + ")"
             )
             complete = subprocess.run(
                 [sys.executable, "-I", "-c", script],
@@ -292,7 +299,8 @@ class DistributionTests(unittest.TestCase):
 
             secret = root / "outside-secret.txt"
             secret.write_text("must not be packaged")
-            target = clean / "sec_review" / "symlink_secret.py"
+            target = clean / "sec_review" / "cli.py"
+            target.unlink()
             target.symlink_to(secret)
             rejected = subprocess.run(
                 [sys.executable, "-I", "-c", script],
@@ -303,6 +311,21 @@ class DistributionTests(unittest.TestCase):
             )
             self.assertNotEqual(rejected.returncode, 0)
             self.assertIn("Refusing symbolic-link build input", rejected.stderr + rejected.stdout)
+
+    def test_sdist_manifest_rejects_del_character_in_existing_path(self):
+        import sec_review_build
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            unsafe = "unsafe\x7fname"
+            (root / unsafe).write_text("content")
+            manifest = root / "config/sdist-manifest.json"
+            manifest.parent.mkdir()
+            manifest.write_text(json.dumps({"schema_version": "1.0", "files": [unsafe]}))
+
+            with mock.patch.object(sec_review_build, "ROOT", root):
+                with self.assertRaises(RuntimeError):
+                    sec_review_build._manifest_source_files()
 
     def test_module_entrypoint_returns_cli_status(self):
         with mock.patch("sec_review.cli.main", return_value=7):

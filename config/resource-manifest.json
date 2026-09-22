@@ -1,0 +1,89 @@
+{
+  "schema_version": "1.0",
+  "resources": [
+    {
+      "path": "config/claude-settings.json",
+      "sha256": "3cb8be7ddfa3f32aa584c2eab97671caa933978fd4ba414ad5316d34252be77e"
+    },
+    {
+      "path": "config/claude.version",
+      "sha256": "6599c5b040152a44e4aa791dea42350000b1f3b3e2f2cb349abcae94f23841d0"
+    },
+    {
+      "path": "config/empty-mcp.json",
+      "sha256": "e93fc8db2b1bd77107fe6c758bca9545fa864cf7cce8ab93a7b2b93a1d566a7b"
+    },
+    {
+      "path": "config/gitleaks.toml",
+      "sha256": "931f0990410ef317a25fa65e77ea2242b287e9a331e54e455948d07ce4903c27"
+    },
+    {
+      "path": "config/hunter.schema.json",
+      "sha256": "9ffddc4f13e53798fd179e8ef4bbd85221ebcdcd812b1f1d724c2d51a1de3b84"
+    },
+    {
+      "path": "config/project-context.md",
+      "sha256": "f71e436ce62a86a3fb314251b06f2740406b8105d5e109de1e85b657b5c09e18"
+    },
+    {
+      "path": "config/sdist-manifest.json",
+      "sha256": "95e25eaa2991e13793dd4aa75cde3a342b7dd76c2a0fc3f6be14349b0b5ba167"
+    },
+    {
+      "path": "config/semgrep.yaml",
+      "sha256": "47dda4cdd42e449677868e62522fc690d321766ce6682ea6bae1bae0429f8c6c"
+    },
+    {
+      "path": "config/tools.lock.json",
+      "sha256": "69de9e590ad6fadedec0cea9ac83fb559a303f08f58c128be9ae9ffb6c85d258"
+    },
+    {
+      "path": "config/trivy.yaml",
+      "sha256": "ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356"
+    },
+    {
+      "path": "config/verifier.schema.json",
+      "sha256": "cc6cc86f758de660fdc60b5ef509f3a77d6f3ad37f61c5739ebabbeb99820a86"
+    },
+    {
+      "path": "examples/fixed/Dockerfile",
+      "sha256": "9653d077e06b137b553ecfcb402410a2770e25ea0f33421ba5c24b50df2754a9"
+    },
+    {
+      "path": "examples/fixed/app.py",
+      "sha256": "7db1501b7e585d3234945e09d8bda705c3bd0df48434bae8e53c5f505764d0ef"
+    },
+    {
+      "path": "examples/fixed/requirements.txt",
+      "sha256": "248ffa708f8fc9999bb15fd1bb96200db730276dc80403c40fc407b2648cf2ec"
+    },
+    {
+      "path": "examples/vulnerable/Dockerfile",
+      "sha256": "39d795acee0bf969f8f63f53ae69597828bab0bfaa610db9c483485afaa02a3b"
+    },
+    {
+      "path": "examples/vulnerable/app.py",
+      "sha256": "920a8737a1791f55ab27c77b46c83c762413fea64f6b65db68ec18b5ffaf2889"
+    },
+    {
+      "path": "examples/vulnerable/credentials.txt",
+      "sha256": "e508899557a9356a0c6ffb2a897e0074f904cf30b59bec4c19dbbe557558eed1"
+    },
+    {
+      "path": "examples/vulnerable/requirements.txt",
+      "sha256": "2e04d00f865942852b556b8dd2e5251932d5e32d107dc3ddf3120e9236a1e37f"
+    },
+    {
+      "path": "prompts/hunter.md",
+      "sha256": "9703722d9edd81ca3cdc6392d14d2fff0d89ee7f1090e7463a77243a1b86feb7"
+    },
+    {
+      "path": "prompts/verifier.md",
+      "sha256": "71a195e1235d86c2c0234f1c2d1c91d505a551b85f9642f9f5aad96b75d805e0"
+    },
+    {
+      "path": "tests/test_demo_app.py",
+      "sha256": "acd04decd4013615dc62d4966107ea9f73173e5d0271a96db937b56c9055f339"
+    }
+  ]
+}

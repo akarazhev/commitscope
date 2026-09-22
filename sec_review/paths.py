@@ -6,14 +6,7 @@ import platform
 import sysconfig
 
 from .core import ReviewError, no_symlinks
-
-REQUIRED_RESOURCES = (
-    'config/tools.lock.json', 'config/semgrep.yaml',
-    'config/gitleaks.toml', 'config/trivy.yaml',
-    'prompts/hunter.md', 'prompts/verifier.md',
-    'examples/vulnerable/app.py', 'examples/fixed/app.py',
-    'tests/test_demo_app.py',
-)
+from .resources import validate_resource_root
 
 
 def source_checkout_root(package_file: Path | None = None) -> Path | None:
@@ -24,13 +17,7 @@ def source_checkout_root(package_file: Path | None = None) -> Path | None:
 
 def select_resource_root(source: Path | None, data_root: Path) -> Path:
     candidate = source if source is not None else data_root / 'share/commitscope'
-    no_symlinks(candidate)
-    missing = [name for name in REQUIRED_RESOURCES if not (candidate / name).is_file()]
-    if missing:
-        raise ReviewError('CommitScope runtime resources are incomplete: ' + ', '.join(missing))
-    for name in REQUIRED_RESOURCES:
-        no_symlinks(candidate / name)
-    return candidate
+    return validate_resource_root(candidate)
 
 
 def current_resource_root() -> Path:
