@@ -51,8 +51,12 @@ def validate_resource_root(root: Path) -> Path:
                 continue
             if path.suffix == ".pyc" or relative == RESOURCE_MANIFEST:
                 continue
-            if path.is_file():
-                discovered.add(relative)
+            no_symlinks(path)
+            if path.is_dir():
+                continue
+            if not path.is_file():
+                raise ReviewError(f"Resource is not a regular file: {relative}")
+            discovered.add(relative)
 
     declared = set(resources)
     if discovered != declared:

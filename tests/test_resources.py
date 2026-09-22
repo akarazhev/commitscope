@@ -89,6 +89,25 @@ class ResourceManifestTests(unittest.TestCase):
             with self.assertRaises(ReviewError):
                 validate_resource_root(root)
 
+    def test_undeclared_dangling_symlink_is_rejected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = write_resource_root(Path(directory).resolve())
+            (root / "prompts/dangling.md").symlink_to(root / "missing.md")
+
+            with self.assertRaises(ReviewError):
+                validate_resource_root(root)
+
+    def test_undeclared_directory_symlink_is_rejected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            root = write_resource_root(base / "root")
+            outside = base / "outside-directory"
+            outside.mkdir()
+            (root / "examples/linked-directory").symlink_to(outside, target_is_directory=True)
+
+            with self.assertRaises(ReviewError):
+                validate_resource_root(root)
+
     def test_corrupt_declared_hash_is_rejected(self):
         with tempfile.TemporaryDirectory() as directory:
             root = write_resource_root(Path(directory).resolve())
