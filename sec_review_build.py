@@ -39,6 +39,7 @@ EXCLUDED_SOURCE_PARTS = {
     "__pycache__",
     "build",
     "dist",
+    "reports",
 }
 EXCLUDED_SUFFIXES = {".pyc", ".pyo"}
 SOURCE_MANIFEST = "config/sdist-manifest.json"
@@ -321,9 +322,12 @@ def _include_source(path: Path) -> bool:
         return False
     if any(part in EXCLUDED_SOURCE_PARTS for part in relative.parts):
         return False
-    if path.name == ".env" or path.name.startswith(".env."):
+    if path.name.startswith(".env"):
         return False
-    if path.name == "credentials.json" or path.suffix == ".tmp" or "raw" in relative.parts:
+    if (path.name.startswith("credentials")
+            and relative.as_posix() != "examples/vulnerable/credentials.txt"):
+        return False
+    if path.suffix == ".tmp" or "raw" in relative.parts or ".raw." in path.name:
         return False
     _validate_build_input(path)
     return True

@@ -28,7 +28,9 @@ def parser() -> argparse.ArgumentParser:
     sub=p.add_subparsers(dest='command',required=True)
     sub.add_parser('preflight',help='Check fresh-host Python/Git/venv prerequisites without network access')
     sub.add_parser('bootstrap',help='Install pinned scanners locally without sudo')
-    sub.add_parser('doctor',help='Check Python/Git and installed scanner versions; Claude is optional')
+    sub.add_parser('doctor',help='Python/Git and scanner diagnostics; does not establish corporate readiness',
+                   description='Check Python/Git and installed scanners. This does not establish corporate readiness; '
+                               'corporate review also requires account-authenticated Claude Hunter and Verifier stages.')
     s=sub.add_parser('scan',help='Partial scanner evidence; not a completed corporate review',
                      description='Run scanners on a committed snapshot. This partial command is not a completed corporate review.')
     s.add_argument('--repo',type=Path,required=True); s.add_argument('--ref',default='HEAD'); s.add_argument('--base')

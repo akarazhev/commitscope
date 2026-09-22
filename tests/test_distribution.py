@@ -24,6 +24,33 @@ def tracked_runtime_resources() -> set[str]:
 
 
 class DistributionTests(unittest.TestCase):
+    def test_source_exclusions_apply_to_tracked_and_manifest_declared_candidates(self):
+        import sec_review_build
+        forbidden = ['.envrc', 'credentials-prod.json', 'reports/report.json', 'capture.raw.json',
+                     'credentials.txt', 'examples/other/credentials.txt']
+        allowed = ['examples/vulnerable/credentials.txt', 'sec_review/app.py']
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            for relative in forbidden + allowed:
+                path = root / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text('synthetic fixture')
+            manifest = root / sec_review_build.SOURCE_MANIFEST
+            manifest.parent.mkdir()
+            manifest.write_text(json.dumps({'schema_version': '1.0', 'files': forbidden + allowed}))
+            for tracked in (forbidden + allowed, []):
+                with self.subTest(tracked=bool(tracked)), mock.patch.object(sec_review_build, 'ROOT', root), \
+                     mock.patch.object(sec_review_build, '_git_ls_files', return_value=tracked):
+                    paths = sec_review_build._source_files()
+                    self.assertEqual({path.relative_to(root).as_posix() for path in paths}, set(allowed))
+
+    def test_doctor_help_separates_scanner_diagnostics_from_corporate_readiness(self):
+        from sec_review.cli import parser
+        help_text = ' '.join(parser().format_help().split())
+        self.assertIn('scanner diagnostics', help_text)
+        self.assertIn('does not establish corporate readiness', help_text)
+        self.assertNotIn('Claude is optional', help_text)
+
     def project_metadata(self):
         return tomllib.loads((ROOT / "pyproject.toml").read_text())
 
