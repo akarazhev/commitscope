@@ -14,7 +14,7 @@ from .reports import save_reports
 
 def run_scan(repo: Path, out: Path, *, ref: str='HEAD', base: str | None=None,
              tools_root: Path | None = None, resources: Path | None = None, timeout: int=360, offline: bool=False,
-             allow_empty_sca: str='', fail_on: str='high') -> dict:
+             allow_empty_sca: str='', fail_on: str='high', defer_reports: bool=False) -> dict:
     repo=repo.resolve(); out=out.absolute()
     no_symlinks(out)
     out=out.resolve(strict=False)
@@ -47,8 +47,9 @@ def run_scan(repo: Path, out: Path, *, ref: str='HEAD', base: str | None=None,
             report['scanners']=[{'name':name,'status':'not_run','reason':str(e)} for name in ('semgrep','gitleaks','trivy-vuln','trivy-iac')]
     finally:
         report['finished_at']=now()
-        save_reports(out,report)
-        if claim is not None:
+        if not defer_reports:
+            save_reports(out,report)
+        if claim is not None and not defer_reports:
             mark_output_claim(out)
         shutil.rmtree(work,ignore_errors=True)
     return report

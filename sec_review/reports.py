@@ -10,6 +10,8 @@ EXPECTED={'semgrep','gitleaks','trivy-vuln','trivy-iac'}
 RANK={'info':0,'low':1,'medium':2,'high':3,'critical':4,'unknown':4}
 
 def decision(report: dict) -> dict:
+    if report.get('review_kind') == 'corporate':
+        return corporate_decision(report)
     reasons=[]; scans=report.get('scanners',[])
     names=[s.get('name') for s in scans]
     if len(names)!=len(EXPECTED) or set(names)!=EXPECTED: reasons.append('Missing or duplicate required scanner result')
@@ -25,12 +27,59 @@ def decision(report: dict) -> dict:
     if blocked: return {'status':'FINDINGS','exit_code':1,'reasons':[f'{len(blocked)} finding(s) meet the {report.get("fail_on","high")} threshold; human triage required']}
     return {'status':'PASS','exit_code':0,'reasons':['Selected checks completed with no findings at the configured threshold. Not a statement that the application is secure. Not human approval.']}
 
+
+def corporate_decision(report: dict) -> dict:
+    """Completion precedes triage; no machine decision grants human approval."""
+    reasons = []
+    scans = report.get('scanners', [])
+    if [scan.get('name') for scan in scans] != ['semgrep', 'gitleaks', 'trivy-vuln', 'trivy-iac']:
+        reasons.append('Missing, duplicate or unordered required scanner result')
+    for scan in scans:
+        status = scan.get('status')
+        if status not in ('complete', 'not_applicable') or (
+                status == 'not_applicable' and (scan.get('name') in ('semgrep', 'gitleaks') or not scan.get('reason'))):
+            reasons.append(f'{scan.get("name")}: incomplete scanner evidence')
+    snapshot = report.get('snapshot', {})
+    if report.get('error') or not snapshot.get('snapshot_sha256') or snapshot.get('inline_iac_suppressions'):
+        reasons.append('Snapshot or prerequisites are incomplete')
+    ai = report.get('ai', {})
+    stages = ai.get('stages', {})
+    if (ai.get('requested') is not True or ai.get('status') != 'complete'
+            or set(stages) != {'hunter', 'verifier'}
+            or any(stage.get('status') != 'complete' for stage in stages.values())):
+        reasons.append('Hunter and Verifier must both complete')
+    else:
+        from .ai import validate_corporate_verifier
+        from .core import ReviewError
+        try:
+            candidates = ai['hunter']['findings']
+            ids = [item['id'] for item in candidates]
+            if len(set(ids)) != len(ids):
+                raise ReviewError('Duplicate Hunter IDs')
+            validate_corporate_verifier(ai['verifier'], ids)
+        except (ReviewError, KeyError, TypeError, ValueError):
+            reasons.append('Invalid Hunter/Verifier coverage')
+    if reasons:
+        return {'status': 'INCOMPLETE', 'exit_code': 2, 'reasons': reasons}
+    threshold = RANK[report.get('fail_on', 'high')]
+    blocked = [item for item in report.get('findings', [])
+               if item.get('tool') != 'claude' and RANK.get(item.get('severity'), 4) >= threshold]
+    verdicts = {item['finding_id']: item['status'] for item in ai['verifier']['verdicts']}
+    blocked += [item for item in candidates if verdicts[item['id']] != 'rejected'
+                and RANK.get(item.get('severity'), 4) >= threshold]
+    if blocked:
+        return {'status': 'FINDINGS_REQUIRE_TRIAGE', 'exit_code': 1,
+                'reasons': [f'{len(blocked)} finding(s) meet the {report.get("fail_on", "high")} threshold; human triage required']}
+    return {'status': 'READY_FOR_HUMAN_REVIEW', 'exit_code': 0,
+            'reasons': ['All required stages completed with no findings at the policy threshold. Not human approval.']}
+
 def md(value: object) -> str:
     return html.escape(str(value)).replace('|','&#124;').replace('\r',' ').replace('\n',' ').replace('`','&#96;')
 
 def render_markdown(report: dict) -> str:
     d=decision(report); snap=report.get('snapshot',{})
-    lines=['# Security review report','',f'**Scanner policy: {d["status"]}**',
+    label = 'Corporate review' if report.get('review_kind') == 'corporate' else 'Scanner policy'
+    lines=['# Security review report','',f'**{label}: {d["status"]}**',
            '','This result is not a release authorization or an authenticated human approval.',
            '',f'- Run: `{md(report.get("run_id",""))}`',f'- Commit: `{md(snap.get("head",""))}`',
            f'- Scope: {md(snap.get("scope","recorded snapshot"))}',f'- AI: {md(report.get("ai",{}).get("status","not_requested"))}',

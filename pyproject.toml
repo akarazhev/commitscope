@@ -51,6 +51,7 @@ version = {attr = "sec_review.__version__"}
   "config/project-context.md",
   "config/resource-manifest.json",
   "config/review-policy.schema.json",
+  "config/reviewer-decision.schema.json",
   "config/sdist-manifest.json",
   "config/semgrep.yaml",
   "config/tools.lock.json",

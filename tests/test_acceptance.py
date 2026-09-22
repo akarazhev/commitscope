@@ -12,11 +12,12 @@ class AcceptanceTests(unittest.TestCase):
         self.assertTrue(entry.is_file(), 'A real executable entrypoint must be shipped')
         p = subprocess.run([sys.executable, '-I', str(entry), '--help'], capture_output=True, text=True)
         self.assertEqual(p.returncode, 0, p.stderr)
-        for command in ('bootstrap', 'doctor', 'scan', 'demo', 'ai', 'compare'):
+        for command in ('bootstrap', 'doctor', 'scan', 'demo', 'ai', 'compare', 'review', 'verify-review'):
             self.assertIn(command, p.stdout)
         self.assertIn('CommitScope', p.stdout)
         self.assertIn('Evidence-driven security review for Git repositories', p.stdout)
         self.assertNotIn('Security Review Project:', p.stdout)
+        self.assertIn('partial', p.stdout.lower())
     def test_installable_cli_and_consumer_action_are_documented(self):
         readme = (ROOT / 'README.md').read_text()
         workflow = (ROOT / 'docs/examples/commitscope.yml').read_text()

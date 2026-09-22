@@ -38,8 +38,12 @@
       "sha256": "61c597a0c75e98a15139f34035c31d625841ba9cce1aae45413ede51f0561946"
     },
     {
+      "path": "config/reviewer-decision.schema.json",
+      "sha256": "9f9837ee04eb0304120cf043a565289b57f3b9d9c8d4b797a8070949bd51f186"
+    },
+    {
       "path": "config/sdist-manifest.json",
-      "sha256": "367a04d1babd07f4d2442c291ae20e53504eceea09a551720decdaa67124c8bd"
+      "sha256": "a82d365b935526a04dff85705081f3db21de3c7e951086195047d7758011c5b3"
     },
     {
       "path": "config/semgrep.yaml",

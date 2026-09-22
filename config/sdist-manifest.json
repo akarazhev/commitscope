@@ -23,6 +23,7 @@
     "config/project-context.md",
     "config/resource-manifest.json",
     "config/review-policy.schema.json",
+    "config/reviewer-decision.schema.json",
     "config/sdist-manifest.json",
     "config/semgrep.yaml",
     "config/tools.lock.json",
@@ -113,7 +114,9 @@
     "sec_review/auth.py",
     "sec_review/cli.py",
     "sec_review/core.py",
+    "sec_review/corporate.py",
     "sec_review/demo.py",
+    "sec_review/manifest.py",
     "sec_review/paths.py",
     "sec_review/policy.py",
     "sec_review/project.py",
@@ -131,6 +134,7 @@
     "tests/test_auth.py",
     "tests/test_core.py",
     "tests/test_corporate_ai.py",
+    "tests/test_corporate_review.py",
     "tests/test_demo_app.py",
     "tests/test_distribution.py",
     "tests/test_fresh_start.py",
@@ -140,6 +144,7 @@
     "tests/test_policy.py",
     "tests/test_reports.py",
     "tests/test_resources.py",
+    "tests/test_review_verification.py",
     "tests/test_snapshot.py"
   ]
 }

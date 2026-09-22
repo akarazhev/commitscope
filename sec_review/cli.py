@@ -16,6 +16,10 @@ from .reports import decision, compare
 from .ai import run_ai
 from .auth import check_auth, validate_ai_options, locate_claude
 from .demo import demo
+from .corporate import run_review
+from .manifest import verify_review
+from .policy import validate_review_request
+from .ai import validate_exact_model
 
 
 def parser() -> argparse.ArgumentParser:
@@ -25,7 +29,8 @@ def parser() -> argparse.ArgumentParser:
     sub.add_parser('preflight',help='Check fresh-host Python/Git/venv prerequisites without network access')
     sub.add_parser('bootstrap',help='Install pinned scanners locally without sudo')
     sub.add_parser('doctor',help='Check Python/Git and installed scanner versions; Claude is optional')
-    s=sub.add_parser('scan',help='Run real scanners on a clean, committed repository snapshot')
+    s=sub.add_parser('scan',help='Partial scanner evidence; not a completed corporate review',
+                     description='Run scanners on a committed snapshot. This partial command is not a completed corporate review.')
     s.add_argument('--repo',type=Path,required=True); s.add_argument('--ref',default='HEAD'); s.add_argument('--base')
     s.add_argument('--out',type=Path); s.add_argument('--timeout',type=int,default=360)
     s.add_argument('--offline',action='store_true',help='Use cached Trivy DB; missing/stale DB is an incomplete scan')
@@ -33,7 +38,8 @@ def parser() -> argparse.ArgumentParser:
     s.add_argument('--fail-on',choices=('low','medium','high','critical'),default='high')
     s.add_argument('--ai',action='store_true',help='After scanning, make two Claude Code calls')
     for cmd in (s,): ai_options(cmd)
-    a=sub.add_parser('ai',help='Run bounded discovery and independent verification on an existing scan')
+    a=sub.add_parser('ai',help='Partial AI evidence on an existing scan; not a completed corporate review',
+                     description='Legacy AI on an existing scan. This partial command is not a completed corporate review.')
     a.add_argument('--run',type=Path,required=True); ai_options(a,require_auth=True)
     ac=sub.add_parser('auth-check',help='Check local Claude CLI capabilities/auth; no source upload or model request')
     ac.add_argument('--auth',choices=('subscription','api'),required=True)
@@ -41,6 +47,19 @@ def parser() -> argparse.ArgumentParser:
     d.add_argument('--out',type=Path); d.add_argument('--app-only',action='store_true',help='Run only real application tests without scanners/model; NOT a scanner integration test')
     c=sub.add_parser('compare',help='Compare findings between two scan reports')
     c.add_argument('--before',type=Path,required=True); c.add_argument('--after',type=Path,required=True); c.add_argument('--out',type=Path)
+    r=sub.add_parser('review',help='Run the complete local corporate review; exit 0 still requires human review')
+    r.add_argument('--repo',type=Path,required=True)
+    r.add_argument('--ref',required=True)
+    r.add_argument('--policy',type=Path,required=True)
+    r.add_argument('--out',type=Path,required=True)
+    r.add_argument('--auth',choices=('account',),required=True)
+    r.add_argument('--allow-code-upload',action='store_true')
+    r.add_argument('--model',required=True)
+    r.add_argument('--timeout',type=int,default=360)
+    r.add_argument('--ai-timeout',type=int,default=240)
+    r.add_argument('--max-turns',type=int,default=3)
+    v=sub.add_parser('verify-review',help='Verify corporate evidence integrity; no signature or human approval is implied')
+    v.add_argument('--run',type=Path,required=True)
     return p
 
 def ai_options(p, *, require_auth=False):
@@ -93,6 +112,24 @@ def main(argv=None) -> int:
     args=parser().parse_args(argv)
     try:
         if sys.version_info<(3,11): raise ReviewError('Python 3.11 or newer is required')
+        if args.command=='review':
+            if not args.allow_code_upload:
+                raise ReviewError('Corporate review requires explicit --allow-code-upload consent')
+            validate_exact_model(args.model)
+            validate_ai_options('subscription',None,args.max_turns,args.ai_timeout)
+            if not 30 <= args.timeout <= 3600:
+                raise ReviewError('--timeout must be from 30 to 3600 seconds')
+            request=validate_review_request(args.repo,args.ref,args.policy,args.out)
+            r=run_review(request,model=args.model,timeout=args.ai_timeout,max_turns=args.max_turns,
+                         scanner_timeout=args.timeout)
+            print(f'{r["decision"]["status"]}: {args.out / "report.md"}')
+            for reason in r['decision']['reasons']: print(reason)
+            return r['decision']['exit_code']
+        if args.command=='verify-review':
+            code,result=verify_review(args.run)
+            print(result['warning'])
+            print(json.dumps(result,indent=2))
+            return code
         if args.command=='preflight':
             print(json.dumps(check_prerequisites(),indent=2)); return 0
         if args.command=='bootstrap': bootstrap(); return 0
