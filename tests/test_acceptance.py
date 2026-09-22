@@ -42,7 +42,16 @@ class AcceptanceTests(unittest.TestCase):
         workflow = (ROOT / 'docs/examples/commitscope.yml').read_text()
         self.assertIn('pipx install /absolute/path/to/commitscope', readme)
         self.assertNotIn('commitscope.git@v2.3.0', readme)
-        self.assertIn('uses: akarazhev/commitscope@v2.3.0', workflow)
+        self.assertNotIn('akarazhev/commitscope@v2.3.0', workflow)
+        self.assertIn(
+            'uses: akarazhev/commitscope@REVIEWED_COMMITSCOPE_2_4_COMMIT_SHA',
+            workflow,
+        )
+        self.assertIn(
+            'Replace REVIEWED_COMMITSCOPE_2_4_COMMIT_SHA with the reviewed full '
+            '40-character CommitScope 2.4 commit SHA before enabling this workflow.',
+            workflow,
+        )
         self.assertIn('persist-credentials: false', workflow)
         self.assertIn('security-events: write', workflow)
         self.assertIn('submodules: false', workflow)
@@ -59,6 +68,35 @@ class AcceptanceTests(unittest.TestCase):
             active = active_documentation((ROOT / relative).read_text())
             self.assertNotIn('v2.3.0', active, relative)
             self.assertNotIn('2.1.1', active, relative)
+
+    def test_active_operator_docs_do_not_advertise_partial_review_as_complete(self):
+        operator_docs = (
+            'README.md',
+            'START-HERE.md',
+            'CLAUDE.md',
+            'docs/SECURITY.md',
+            'docs/AUTHENTICATION.md',
+            'docs/VERIFICATION.md',
+            'docs/CI.md',
+            'docs/AI.md',
+            'docs/REVIEW-PROCESS.md',
+            'docs/INSTALLATION.md',
+            'docs/EXAMPLES.md',
+            'docs/SOURCES.md',
+        )
+        forbidden = (
+            'claude code can be used as an optional',
+            'claude code is optional',
+            'optional claude code',
+            'optional ai verification',
+            'scanner-only readiness does not require',
+            'scanner-only success',
+            'scanners_verified_ai_not_run',
+        )
+        for relative in operator_docs:
+            active = active_documentation((ROOT / relative).read_text()).lower()
+            for phrase in forbidden:
+                self.assertNotIn(phrase, active, f'{relative}: {phrase}')
 
     def test_entry_docs_define_complete_local_corporate_review(self):
         command = '''commitscope review \\
