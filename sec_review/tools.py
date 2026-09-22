@@ -16,12 +16,13 @@ import urllib.request
 import venv
 from . import __version__
 from .core import ROOT, ReviewError, child_env, execute, file_hash, now, private_dir, read_json, write_json, write_text, no_symlinks, safe_path
+from .paths import current_resource_root, current_tools_root
 
 TOOLS=ROOT/'.tools'
 MAX_BINARY_BYTES=200*1024*1024
 
-def lock() -> dict:
-    return read_json(ROOT/'config/tools.lock.json')
+def lock(resources: Path | None = None) -> dict:
+    return read_json((resources or current_resource_root())/'config/tools.lock.json')
 
 def platform_key(system: str | None=None, machine: str | None=None) -> str:
     system=(system or platform.system()).lower(); machine=(machine or platform.machine()).lower()
@@ -31,7 +32,8 @@ def platform_key(system: str | None=None, machine: str | None=None) -> str:
         raise ReviewError(f'Unsupported platform {key}. Use Linux/macOS or Ubuntu under WSL2.')
     return key
 
-def tool_paths(root: Path=TOOLS) -> dict[str,Path]:
+def tool_paths(root: Path | None = None) -> dict[str,Path]:
+    root = root or current_tools_root()
     return {'semgrep':root/'semgrep-env/bin/semgrep','gitleaks':root/'bin/gitleaks','trivy':root/'bin/trivy'}
 
 def semgrep_site_file(root: Path, relative: str) -> Path | None:
@@ -155,7 +157,8 @@ def inspect_semgrep(root: Path, path: Path, expected: str, home: Path) -> dict:
           and wrapper_recorded)
     return {'ok':good,'expected':expected,'reported':reported[:1000],'sha256':file_hash(path)}
 
-def inspect_tools(root: Path=TOOLS) -> dict:
+def inspect_tools(root: Path | None = None) -> dict:
+    root = root or current_tools_root()
     spec=lock(); paths=tool_paths(root); result={}
     with tempfile.TemporaryDirectory(prefix='sr-doctor-') as d:
         home=Path(d); env=child_env(home)
@@ -216,14 +219,16 @@ def check_prerequisites() -> dict:
                 'note': 'No network, scanner, database, Claude login or model request has been verified.'}
 
 
-def bootstrap(root: Path=TOOLS) -> dict:
+def bootstrap(root: Path | None = None) -> dict:
+    root = root or current_tools_root()
+    resources = current_resource_root()
     prerequisites = check_prerequisites()
     key = prerequisites['platform']
     private_dir(root); marker=root/'.bootstrap-lock'
     try: marker.mkdir()
     except FileExistsError as e: raise ReviewError('Another bootstrap may be running. Inspect .tools/.bootstrap-lock before removing a stale lock.') from e
     try:
-        spec=lock(); downloads=private_dir(root/'downloads'); binaries=private_dir(root/'bin'); home=private_dir(root/'install-home')
+        spec=lock(resources); downloads=private_dir(root/'downloads'); binaries=private_dir(root/'bin'); home=private_dir(root/'install-home')
         env=child_env(home,network=True)
         for name in ('gitleaks','trivy','semgrep'):
             item=spec['tools'][name]; print(f'Installing {name} {item["version"]} for {key}...',flush=True)
@@ -233,13 +238,13 @@ def bootstrap(root: Path=TOOLS) -> dict:
                 vpath=root/'semgrep-env'; no_symlinks(vpath)
                 if not (vpath/'bin/python').exists(): venv.EnvBuilder(with_pip=True).create(vpath)
                 result=execute([str(vpath/'bin/python'),'-I','-m','pip','--isolated','install','--disable-pip-version-check',
-                                '--no-input','--prefer-binary','--index-url','https://pypi.org/simple',str(archive)],ROOT,env,900)
+                                '--no-input','--prefer-binary','--index-url','https://pypi.org/simple',str(archive)],resources,env,900)
                 write_text(root/'semgrep-install.log',result.stdout+'\n'+result.stderr)
                 if result.code!=0 or result.truncated: raise ReviewError('Semgrep dependency installation failed; see .tools/semgrep-install.log')
         checks=inspect_tools(root)
         if not all(v['ok'] for v in checks.values()): raise ReviewError('Installed binary version check failed: '+str(checks))
-        freeze=execute([str(root/'semgrep-env/bin/python'),'-I','-m','pip','freeze','--all'],ROOT,env,60)
-        receipt={'installed_at':now(),'host_prerequisites':prerequisites,'platform':key,'python':sys.version,'lock_sha256':file_hash(ROOT/'config/tools.lock.json'),
+        freeze=execute([str(root/'semgrep-env/bin/python'),'-I','-m','pip','freeze','--all'],resources,env,60)
+        receipt={'installed_at':now(),'host_prerequisites':prerequisites,'platform':key,'python':sys.version,'lock_sha256':file_hash(resources/'config/tools.lock.json'),
                  'tools':checks,'semgrep_dependency_resolution':'recorded, not fully hash-locked',
                  'pip_freeze':freeze.stdout.splitlines(),'pip_freeze_exit_code':freeze.code}
         write_json(root/'install-receipt.json',receipt)

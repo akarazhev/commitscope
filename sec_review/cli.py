@@ -5,9 +5,11 @@ import json
 from pathlib import Path
 import shutil
 import sys
+import tempfile
 import uuid
 from . import __version__
-from .core import ROOT, ReviewError, read_json, write_json
+from .core import ReviewError, no_symlinks, read_json, write_json
+from .paths import runs_root
 from .tools import bootstrap, inspect_tools, platform_key, check_prerequisites
 from .project import run_scan
 from .reports import decision, compare
@@ -49,6 +51,33 @@ def ai_options(p, *, require_auth=False):
     p.add_argument('--max-turns',type=int,default=3,help='Turn limit per Claude call (1-20; default 3)')
     p.add_argument('--ai-timeout',type=int,default=240,help='Wall-clock seconds per Claude call (1-3600; default 240)')
 
+def trusted_output_path(path: Path) -> Path:
+    path=path.absolute()
+    try:
+        no_symlinks(path)
+        return path
+    except ReviewError:
+        pass
+    try:
+        resolved=path.resolve(strict=False)
+    except OSError:
+        return path
+    roots=[]
+    for value in (tempfile.gettempdir(), '/tmp', '/var/tmp'):
+        try:
+            root=Path(value).resolve(strict=True)
+        except OSError:
+            continue
+        if root not in roots:
+            roots.append(root)
+    for root in roots:
+        try:
+            resolved.relative_to(root)
+            return resolved
+        except ValueError:
+            continue
+    return path
+
 def main(argv=None) -> int:
     args=parser().parse_args(argv)
     try:
@@ -71,7 +100,7 @@ def main(argv=None) -> int:
                 validate_ai_options(args.auth,args.budget_usd,args.max_turns,args.ai_timeout)
             elif args.auth is not None or args.budget_usd is not None:
                 raise ReviewError('--auth and --budget-usd on scan require --ai; scanners need no Claude credentials')
-            out=(args.out or ROOT/'.runs'/('scan-'+uuid.uuid4().hex[:12])).absolute()
+            out=trusted_output_path(args.out or runs_root()/('scan-'+uuid.uuid4().hex[:12]))
             r=run_scan(args.repo,out,ref=args.ref,base=args.base,timeout=args.timeout,offline=args.offline,
                        allow_empty_sca=args.allow_empty_sca,fail_on=args.fail_on)
             if args.ai: r=run_ai(out,allow_code_upload=True,model=args.model,budget_usd=args.budget_usd,auth_mode=args.auth,max_turns=args.max_turns,timeout=args.ai_timeout)
@@ -82,7 +111,7 @@ def main(argv=None) -> int:
             r=run_ai(args.run.absolute(),allow_code_upload=args.allow_code_upload,model=args.model,budget_usd=args.budget_usd,auth_mode=args.auth,max_turns=args.max_turns,timeout=args.ai_timeout)
             d=decision(r); print(f'{d["status"]}: {args.run / "report.md"}'); return d['exit_code']
         if args.command=='demo':
-            out=(args.out or ROOT/'.runs'/('demo-'+uuid.uuid4().hex[:12])).absolute()
+            out=trusted_output_path(args.out or runs_root()/('demo-'+uuid.uuid4().hex[:12]))
             code,summary=demo(out,app_only=args.app_only)
             print(json.dumps(summary,indent=2)); print('Demo artifacts:',out); return code
         if args.command=='compare':

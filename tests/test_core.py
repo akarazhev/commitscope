@@ -11,6 +11,11 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+from sec_review.core import trusted_internal_temp_path
+tempfile.tempdir = str(trusted_internal_temp_path(Path(tempfile.gettempdir())))
+
 class CoreTests(unittest.TestCase):
     def test_json_duplicate_keys_rejected(self):
         from sec_review.core import decode_json, ReviewError
@@ -172,6 +177,14 @@ class InstallerTests(unittest.TestCase):
                 entry=l['tools'][tool]['assets'][platform]
                 self.assertRegex(entry['sha256'],r'^[0-9a-f]{64}$')
                 self.assertTrue(entry['url'].startswith('https://'))
+    def test_tool_lock_can_be_read_from_selected_resources(self):
+        from sec_review.tools import lock
+        with tempfile.TemporaryDirectory() as directory:
+            resources = Path(directory).resolve()
+            config = resources / 'config'
+            config.mkdir()
+            (config / 'tools.lock.json').write_text('{"schema_version":"selected","tools":{}}')
+            self.assertEqual(lock(resources)['schema_version'], 'selected')
     def test_semgrep_doctor_uses_package_and_core_versions_when_wrapper_is_stale(self):
         from sec_review.tools import inspect_tools
         with tempfile.TemporaryDirectory() as d:

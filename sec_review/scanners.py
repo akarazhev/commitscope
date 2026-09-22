@@ -2,7 +2,8 @@
 from __future__ import annotations
 from datetime import datetime, timezone
 from pathlib import Path
-from .core import ROOT, ReviewError, digest, safe_path, read_json, execute, child_env, private_dir, file_hash, write_text
+from .core import ReviewError, digest, safe_path, read_json, execute, child_env, private_dir, file_hash, write_text
+from .paths import current_resource_root
 from .tools import semgrep_child_env
 
 
@@ -78,20 +79,21 @@ def parse_trivy(data: object, source: Path, kind: str) -> tuple[list,dict]:
                                       str(item.get('Severity','UNKNOWN')).lower(),item.get('Title',item.get('ID','Misconfiguration'))))
     return result,{'package_count':packages,'target_count':relevant}
 
-def run_scanners(source: Path, out: Path, paths: dict[str,Path], *, tools_root: Path,
+def run_scanners(source: Path, out: Path, paths: dict[str,Path], *, tools_root: Path, resources: Path | None = None,
                  timeout: int=360, offline: bool=False, allow_empty_sca: str='', max_db_age_hours: int=72) -> tuple[list,list]:
+    resources = resources or current_resource_root()
     raw=private_dir(out/'raw'); home=private_dir(out/'.work/home'); cwd=private_dir(out/'.work/runner')
     empty=cwd/'empty-ignore'; write_text(empty,'')
     cache=private_dir(tools_root/'cache/trivy')
-    trivy_common=[str(paths['trivy']),'fs','--config',str(ROOT/'config/trivy.yaml'),
+    trivy_common=[str(paths['trivy']),'fs','--config',str(resources/'config/trivy.yaml'),
                   '--format','json','--cache-dir',str(cache),'--ignorefile',str(empty),'--no-progress',
                   '--skip-version-check','--offline-scan','--timeout',str(timeout-5)+'s']
     if offline: trivy_common+=['--skip-db-update','--skip-java-db-update']
     commands={
-      'semgrep':[str(paths['semgrep']),'scan','--config',str(ROOT/'config/semgrep.yaml'),'--oss-only',
+      'semgrep':[str(paths['semgrep']),'scan','--config',str(resources/'config/semgrep.yaml'),'--oss-only',
                   '--json','--output',str(raw/'semgrep.json'),'--metrics','off','--disable-version-check','--disable-nosem',
                   '--no-git-ignore','--strict','--jobs','2','--timeout','15','--max-target-bytes',str(5*1024*1024),str(source)],
-      'gitleaks':[str(paths['gitleaks']),'dir',str(source),'--config',str(ROOT/'config/gitleaks.toml'),
+      'gitleaks':[str(paths['gitleaks']),'dir',str(source),'--config',str(resources/'config/gitleaks.toml'),
                   '--gitleaks-ignore-path',str(empty),'--ignore-gitleaks-allow','--redact=100','--no-banner','--no-color',
                   '--exit-code','10','--report-format','json','--report-path',str(raw/'gitleaks.json'),'--timeout',str(timeout-5)],
       'trivy-vuln':trivy_common+['--scanners','vuln','--list-all-pkgs','--output',str(raw/'trivy-vuln.json'),str(source)],
