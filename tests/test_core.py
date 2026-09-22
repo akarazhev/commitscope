@@ -20,6 +20,23 @@ from sec_review.core import trusted_internal_temp_path
 tempfile.tempdir = str(trusted_internal_temp_path(Path(tempfile.gettempdir())))
 
 class CoreTests(unittest.TestCase):
+    def wait_for_child(self, pid_file):
+        deadline = time.monotonic() + 10
+        while not pid_file.is_file() and time.monotonic() < deadline:
+            time.sleep(.01)
+        self.assertTrue(pid_file.is_file(), 'sleeping child did not start')
+
+    def interrupt_when_ready(self, pid_file):
+        def interrupt():
+            deadline = time.monotonic() + 10
+            while not pid_file.is_file() and time.monotonic() < deadline:
+                if timer.finished.wait(.01):
+                    return
+            if not timer.finished.is_set():
+                os.kill(os.getpid(), signal.SIGINT)
+        timer = threading.Timer(0, interrupt)
+        return timer
+
     def same_group_command(self, pid_file):
         child = ('import os,pathlib,signal,sys,time; '
                  'signal.signal(signal.SIGINT,signal.SIG_IGN); '
@@ -48,7 +65,7 @@ class CoreTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             pid_file = root / 'child.pid'
-            timer = threading.Timer(1, lambda: os.kill(os.getpid(), signal.SIGINT))
+            timer = self.interrupt_when_ready(pid_file)
             timer.start()
             try:
                 with self.assertRaises(KeyboardInterrupt):
@@ -133,7 +150,7 @@ class CoreTests(unittest.TestCase):
             pid_file = root / 'child.pid'
             code = ('import os,pathlib,sys,time; '
                     'pathlib.Path(sys.argv[1]).write_text(str(os.getpid())); time.sleep(30)')
-            timer = threading.Timer(.5, lambda: os.kill(os.getpid(), signal.SIGINT))
+            timer = self.interrupt_when_ready(pid_file)
             timer.start()
             try:
                 with self.assertRaises(KeyboardInterrupt):
@@ -162,7 +179,7 @@ class CoreTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             root = Path(d)
             pid_file = root / 'nested-child.pid'
-            timer = threading.Timer(1, lambda: os.kill(os.getpid(), signal.SIGINT))
+            timer = self.interrupt_when_ready(pid_file)
             timer.start()
             try:
                 with self.assertRaises(KeyboardInterrupt):
@@ -177,7 +194,7 @@ class CoreTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             root = Path(d)
             pid_file = root / 'nested-child.pid'
-            timer = threading.Timer(1, lambda: os.kill(os.getpid(), signal.SIGINT))
+            timer = self.interrupt_when_ready(pid_file)
             timer.start()
             try:
                 with patch.dict(os.environ, {'_COMMITSCOPE_MANAGED_EXECUTE': '1'}), \
@@ -194,7 +211,7 @@ class CoreTests(unittest.TestCase):
             root = Path(d)
             pid_file = root / 'nested-child.pid'
             unwind_file = root / 'unwound'
-            timer = threading.Timer(1, lambda: os.kill(os.getpid(), signal.SIGINT))
+            timer = self.interrupt_when_ready(pid_file)
             timer.start()
             original_communicate = subprocess.Popen.communicate
             calls = 0
@@ -242,6 +259,8 @@ class CoreTests(unittest.TestCase):
             def communicate(process, *args, **kwargs):
                 nonlocal calls
                 calls += 1
+                if calls == 1:
+                    self.wait_for_child(pid_file)
                 if calls == 2:
                     raise KeyboardInterrupt()
                 return original_communicate(process, *args, **kwargs)
