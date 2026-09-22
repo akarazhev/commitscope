@@ -20,6 +20,44 @@ from sec_review.core import trusted_internal_temp_path
 tempfile.tempdir = str(trusted_internal_temp_path(Path(tempfile.gettempdir())))
 
 class CoreTests(unittest.TestCase):
+    def same_group_command(self, pid_file):
+        child = ('import os,pathlib,signal,sys,time; '
+                 'signal.signal(signal.SIGINT,signal.SIG_IGN); '
+                 'pathlib.Path(sys.argv[1]).write_text(str(os.getpid())); time.sleep(30)')
+        leader = ('import subprocess,sys; '
+                  f'subprocess.Popen([sys.executable,"-I","-c",{child!r},sys.argv[1]]).wait()')
+        return [sys.executable, '-I', '-c', leader, str(pid_file)]
+
+    @unittest.skipUnless(os.name == 'posix', 'process groups are POSIX-specific')
+    def test_timeout_kills_ignoring_group_member_after_leader_exits(self):
+        from sec_review.core import execute, child_env
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            pid_file = root / 'child.pid'
+            try:
+                result = execute(self.same_group_command(pid_file), root, child_env(root), 1)
+                self.assertTrue(result.timed_out)
+                self.assertEqual(result.code, 124)
+                self.assert_pid_stopped(pid_file)
+            finally:
+                self.stop_pid_from(pid_file)
+
+    @unittest.skipUnless(os.name == 'posix', 'process groups are POSIX-specific')
+    def test_interrupt_kills_ignoring_group_member_after_leader_exits(self):
+        from sec_review.core import execute, child_env
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            pid_file = root / 'child.pid'
+            timer = threading.Timer(1, lambda: os.kill(os.getpid(), signal.SIGINT))
+            timer.start()
+            try:
+                with self.assertRaises(KeyboardInterrupt):
+                    execute(self.same_group_command(pid_file), root, child_env(root), 10)
+                self.assert_pid_stopped(pid_file)
+            finally:
+                timer.cancel()
+                self.stop_pid_from(pid_file)
+
     def nested_execute_command(self, root, pid_file, *, ignore_interrupt=False, unwind_file=None):
         child = (('import signal; signal.signal(signal.SIGINT,signal.SIG_IGN); '
                   if ignore_interrupt else '') +

@@ -241,6 +241,8 @@ def _stop_process(process: subprocess.Popen, *, allow_cleanup: bool) -> bool:
             return interrupted
         except KeyboardInterrupt:
             interrupted = True
+    # The leader can exit on SIGINT while other members ignore it.
+    _terminate_process(process)
     return interrupted
 
 
