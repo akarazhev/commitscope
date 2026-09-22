@@ -10,7 +10,7 @@ inputs:
     required: false
     default: ''
   out:
-    description: Report directory under runner temp; defaults to a CommitScope run directory.
+    description: New report directory under runner temp; defaults to an invocation-specific CommitScope directory.
     required: false
     default: ''
   fail-on:

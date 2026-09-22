@@ -94,12 +94,14 @@ def parse_action_inputs(environ: Mapping[str, str]) -> ActionInputs:
         run_attempt = _required(environ, 'GITHUB_RUN_ATTEMPT')
         _reject_control(run_id, 'run id')
         _reject_control(run_attempt, 'run attempt')
-        out = runner / f'commitscope-{run_id}-{run_attempt}'
+        out = runner / f'commitscope-{run_id}-{run_attempt}-{uuid.uuid4().hex}'
     no_symlinks(out)
     out = out.resolve(strict=False)
     _inside(out, runner, 'out')
     if out == repo or repo in out.parents:
         raise ReviewError('Action reports must be outside the target repository')
+    if raw_out_text and out.exists():
+        raise ReviewError('Action report directory must not already exist')
 
     fail_on = environ.get('INPUT_FAIL_ON') or 'high'
     if fail_on not in _FAIL_ON:
@@ -141,14 +143,24 @@ def scan_argv(inputs: ActionInputs) -> list[str]:
     return argv
 
 
-def write_action_outputs(path: Path, inputs: ActionInputs, code: int) -> None:
-    records = {
-        'report-directory': inputs.out,
-        'report-json': inputs.out / 'report.json',
-        'report-markdown': inputs.out / 'report.md',
-        'report-sarif': inputs.out / 'report.sarif',
-        'exit-code': code,
-    }
+def _current_reports(inputs: ActionInputs) -> bool:
+    reports = tuple(inputs.out / name for name in ('report.json', 'report.md', 'report.sarif'))
+    return inputs.out.is_dir() and not inputs.out.is_symlink() and all(
+        report.parent == inputs.out and report.is_file() and not report.is_symlink()
+        for report in reports
+    )
+
+
+def write_action_outputs(path: Path, inputs: ActionInputs, code: int, *, reports_ready: bool = True) -> None:
+    records: dict[str, Path | int] = {'exit-code': code}
+    if reports_ready and _current_reports(inputs):
+        records = {
+            'report-directory': inputs.out,
+            'report-json': inputs.out / 'report.json',
+            'report-markdown': inputs.out / 'report.md',
+            'report-sarif': inputs.out / 'report.sarif',
+            **records,
+        }
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open('a', encoding='utf-8') as output:
         for key, value in records.items():
@@ -190,6 +202,12 @@ def run_action(environ: Mapping[str, str], cli_main: Callable[[list[str]], int] 
         inputs = parse_action_inputs(environ)
     except (ReviewError, OSError, ValueError, KeyError, TypeError):
         return 2
+    if inputs.out.exists():
+        try:
+            write_action_outputs(inputs.github_output, inputs, 2, reports_ready=False)
+        except (ReviewError, OSError, ValueError, KeyError, TypeError):
+            pass
+        return 2
     if cli_main(['bootstrap']) != 0:
         try:
             save_bootstrap_failure_report(inputs)
@@ -199,6 +217,8 @@ def run_action(environ: Mapping[str, str], cli_main: Callable[[list[str]], int] 
         return 2
     code = cli_main(scan_argv(inputs))
     if code not in (0, 1, 2):
+        code = 2
+    if not _current_reports(inputs):
         code = 2
     write_action_outputs(inputs.github_output, inputs, code)
     return code

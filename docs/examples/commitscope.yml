@@ -39,7 +39,10 @@ jobs:
           name: commitscope-${{ github.run_id }}
           retention-days: 7
           if-no-files-found: warn
-          path: ${{ steps.commitscope.outputs.report-directory }}
+          path: |
+            ${{ steps.commitscope.outputs.report-json }}
+            ${{ steps.commitscope.outputs.report-markdown }}
+            ${{ steps.commitscope.outputs.report-sarif }}
 
       - name: Upload SARIF to GitHub Code Scanning
         if: always()
