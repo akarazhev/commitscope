@@ -191,6 +191,32 @@ class DistributionTests(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("Refusing symbolic-link build input", result.stderr + result.stdout)
 
+    def test_build_backend_rejects_symlinked_metadata_inputs(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            clone = root / "clone"
+            shutil.copytree(ROOT, clone, symlinks=True, ignore=shutil.ignore_patterns(".git", "__pycache__"))
+            secret = root / "outside-readme.md"
+            secret.write_text("must not be packaged as metadata")
+            readme = clone / "README.md"
+            readme.unlink()
+            readme.symlink_to(secret)
+
+            script = (
+                "from pathlib import Path; import sys; sys.path.insert(0, str(Path.cwd())); "
+                "import sec_review_build; "
+                "sec_review_build.build_wheel(str(Path('dist')))"
+            )
+            result = subprocess.run(
+                [sys.executable, "-I", "-c", script],
+                cwd=clone,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("Refusing symbolic-link build input", result.stderr + result.stdout)
+
     def test_build_backend_files_are_tracked_for_git_url_installs(self):
         for relative in ("sec_review_build.py", "scripts/build_dist.py"):
             result = subprocess.run(

@@ -110,11 +110,11 @@ def build_sdist(sdist_directory: str, config_settings: dict | None = None) -> st
 
 
 def _project() -> dict:
-    return tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    return tomllib.loads(_read_build_text(ROOT / "pyproject.toml"))
 
 
 def _version() -> str:
-    text = (ROOT / "sec_review/__init__.py").read_text(encoding="utf-8")
+    text = _read_build_text(ROOT / "sec_review/__init__.py")
     match = re.search(r"^__version__\s*=\s*['\"]([^'\"]+)['\"]", text, re.MULTILINE)
     if not match:
         raise RuntimeError("Cannot read sec_review.__version__")
@@ -127,7 +127,7 @@ def _dist_info_name() -> str:
 
 def _metadata() -> str:
     project = _project()["project"]
-    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    readme = _read_build_text(ROOT / "README.md")
     lines = [
         "Metadata-Version: 2.1",
         f"Name: {project['name']}",
@@ -274,6 +274,10 @@ def _include_source(path: Path) -> bool:
 def _read_build_input(path: Path) -> bytes:
     _validate_build_input(path)
     return path.read_bytes()
+
+
+def _read_build_text(path: Path) -> str:
+    return _read_build_input(path).decode("utf-8")
 
 
 def _validate_build_input(path: Path, *, must_be_file: bool = True) -> None:
