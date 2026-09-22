@@ -106,7 +106,7 @@ class AcceptanceTests(unittest.TestCase):
   --out /protected/reviews/run-id \\
   --auth account \\
   --allow-code-upload \\
-  --model claude-sonnet-5'''
+  --model APPROVED_EXACT_MODEL_ID'''
         warning = 'READY_FOR_HUMAN_REVIEW does not approve a merge or assert that the application is secure.'
         for relative in ('README.md', 'START-HERE.md'):
             text = (ROOT / relative).read_text()
