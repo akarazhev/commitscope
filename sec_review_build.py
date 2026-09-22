@@ -16,7 +16,6 @@ import re
 import shutil
 import subprocess
 import tarfile
-import time
 import tomllib
 import zipfile
 
@@ -59,10 +58,10 @@ def prepare_metadata_for_build_wheel(
     if target.exists():
         shutil.rmtree(target)
     target.mkdir(parents=True)
-    (target / "METADATA").write_text(_metadata(), encoding="utf-8")
-    (target / "WHEEL").write_text(_wheel_file(), encoding="utf-8")
-    (target / "entry_points.txt").write_text(_entry_points(), encoding="utf-8")
-    (target / "top_level.txt").write_text("sec_review\n", encoding="utf-8")
+    for relative, content in _metadata_entries():
+        path = target / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(content)
     return dist_info
 
 
@@ -80,15 +79,9 @@ def build_wheel(
 
     with zipfile.ZipFile(archive_path, "w", compression=zipfile.ZIP_DEFLATED) as wheel:
         for source, archive_name in _wheel_payload_files():
-            _write_wheel_file(wheel, archive_name, source.read_bytes(), records)
+            _write_wheel_file(wheel, archive_name, _read_build_input(source), records)
 
-        for archive_name, content in (
-            (f"{dist_info}/METADATA", _metadata().encode("utf-8")),
-            (f"{dist_info}/WHEEL", _wheel_file().encode("utf-8")),
-            (f"{dist_info}/entry_points.txt", _entry_points().encode("utf-8")),
-            (f"{dist_info}/top_level.txt", b"sec_review\n"),
-            (f"{dist_info}/licenses/LICENSE", (ROOT / "LICENSE").read_bytes()),
-        ):
+        for archive_name, content in _wheel_metadata_files(dist_info, metadata_directory):
             _write_wheel_file(wheel, archive_name, content, records)
 
         record_name = f"{dist_info}/RECORD"
@@ -176,6 +169,35 @@ def _entry_points() -> str:
     return "\n".join(rows)
 
 
+def _metadata_entries() -> list[tuple[str, bytes]]:
+    return [
+        ("METADATA", _metadata().encode("utf-8")),
+        ("WHEEL", _wheel_file().encode("utf-8")),
+        ("entry_points.txt", _entry_points().encode("utf-8")),
+        ("top_level.txt", b"sec_review\n"),
+        ("licenses/LICENSE", _read_build_input(ROOT / "LICENSE")),
+    ]
+
+
+def _wheel_metadata_files(dist_info: str, metadata_directory: str | None) -> list[tuple[str, bytes]]:
+    if metadata_directory is None:
+        return [(f"{dist_info}/{relative}", content) for relative, content in _metadata_entries()]
+
+    metadata_path = Path(metadata_directory)
+    source_root = metadata_path if metadata_path.name == dist_info else metadata_path / dist_info
+    _validate_input_under(source_root, source_root.parent, must_be_file=False)
+    if not source_root.is_dir():
+        raise RuntimeError(f"Prepared metadata directory is missing: {source_root}")
+    entries: list[tuple[str, bytes]] = []
+    for source in sorted(source_root.rglob("*")):
+        if source.is_dir():
+            continue
+        _validate_input_under(source, source_root)
+        relative = source.relative_to(source_root).as_posix()
+        entries.append((f"{dist_info}/{relative}", source.read_bytes()))
+    return entries
+
+
 def _wheel_payload_files() -> list[tuple[Path, str]]:
     payload: list[tuple[Path, str]] = []
     project = _project()
@@ -188,8 +210,11 @@ def _wheel_payload_files() -> list[tuple[Path, str]]:
     for destination, sources in project["tool"]["commitscope-build"]["data-files"].items():
         for relative in sources:
             source = ROOT / relative
+            _validate_build_input(source)
             payload.append((source, f"{DIST_INFO_BASE}-{_version()}.data/data/{destination}/{source.name}"))
 
+    for _, archive_name in payload:
+        _validate_archive_name(archive_name)
     return sorted(payload, key=lambda item: item[1])
 
 
@@ -242,18 +267,57 @@ def _include_source(path: Path) -> bool:
         return False
     if any(part in EXCLUDED_SOURCE_PARTS for part in relative.parts):
         return False
-    return path.is_file()
+    _validate_build_input(path)
+    return True
+
+
+def _read_build_input(path: Path) -> bytes:
+    _validate_build_input(path)
+    return path.read_bytes()
+
+
+def _validate_build_input(path: Path, *, must_be_file: bool = True) -> None:
+    _validate_input_under(path, ROOT, must_be_file=must_be_file)
+
+
+def _validate_input_under(path: Path, root: Path, *, must_be_file: bool = True) -> None:
+    try:
+        relative = path.relative_to(root)
+    except ValueError as error:
+        raise RuntimeError(f"Build input escapes project root: {path}") from error
+    current = root
+    for part in relative.parts:
+        current = current / part
+        if current.is_symlink():
+            raise RuntimeError(f"Refusing symbolic-link build input: {current}")
+    try:
+        resolved = path.resolve(strict=True)
+        resolved.relative_to(root.resolve(strict=True))
+    except (OSError, ValueError) as error:
+        raise RuntimeError(f"Build input escapes project root: {path}") from error
+    if must_be_file and not path.is_file():
+        raise RuntimeError(f"Build input is not a regular file: {path}")
+
+
+def _validate_archive_name(archive_name: str) -> None:
+    if archive_name.startswith("/") or "\\" in archive_name:
+        raise RuntimeError(f"Unsafe archive path: {archive_name}")
+    parts = archive_name.split("/")
+    if not archive_name or any(part in ("", ".", "..") for part in parts):
+        raise RuntimeError(f"Unsafe archive path: {archive_name}")
 
 
 def _write_wheel_file(
     wheel: zipfile.ZipFile, archive_name: str, content: bytes, records: list[tuple[str, str, int]]
 ) -> None:
+    _validate_archive_name(archive_name)
     _write_zip_bytes(wheel, archive_name, content)
     digest = base64.urlsafe_b64encode(hashlib.sha256(content).digest()).decode("ascii").rstrip("=")
     records.append((archive_name, f"sha256={digest}", len(content)))
 
 
 def _write_zip_bytes(wheel: zipfile.ZipFile, archive_name: str, content: bytes) -> None:
+    _validate_archive_name(archive_name)
     info = zipfile.ZipInfo(archive_name, ZIP_EPOCH)
     info.compress_type = zipfile.ZIP_DEFLATED
     info.external_attr = 0o644 << 16
@@ -270,6 +334,8 @@ def _record(records: list[tuple[str, str, int]], record_name: str) -> str:
 
 
 def _add_tar_file(sdist: tarfile.TarFile, source: Path, archive_name: str) -> None:
+    _validate_build_input(source)
+    _validate_archive_name(archive_name)
     info = sdist.gettarinfo(str(source), archive_name)
     info.uid = 0
     info.gid = 0
@@ -281,6 +347,7 @@ def _add_tar_file(sdist: tarfile.TarFile, source: Path, archive_name: str) -> No
 
 
 def _add_tar_bytes(sdist: tarfile.TarFile, archive_name: str, content: bytes) -> None:
+    _validate_archive_name(archive_name)
     info = tarfile.TarInfo(archive_name)
     info.size = len(content)
     info.mode = 0o644

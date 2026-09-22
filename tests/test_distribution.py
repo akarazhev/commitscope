@@ -1,6 +1,7 @@
 from pathlib import Path
 import os
 import runpy
+import shutil
 import subprocess
 import sys
 import tarfile
@@ -128,7 +129,67 @@ class DistributionTests(unittest.TestCase):
             self.assertIn("commitscope-2.3.0/pyproject.toml", sdist_entries)
             self.assertIn("commitscope-2.3.0/sec_review_build.py", sdist_entries)
             self.assertIn("commitscope-2.3.0/config/tools.lock.json", sdist_entries)
-            self.assertFalse(any("/.tools/" in entry or "/.runs/" in entry for entry in sdist_entries))
+            blocked = (
+                "/.git/",
+                "/.idea/",
+                "/.runs/",
+                "/.tools/",
+                "/.worktrees/",
+                "/raw/",
+            )
+            self.assertFalse(any(any(part in entry for part in blocked) for entry in sdist_entries))
+            self.assertFalse(any(entry.startswith("/") or "/../" in entry or entry.endswith(".raw.json") for entry in sdist_entries))
+
+    def test_prepared_metadata_matches_wheel_dist_info_except_record(self):
+        import sec_review_build
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            metadata_root = root / "metadata"
+            dist = root / "dist"
+            dist_info = sec_review_build.prepare_metadata_for_build_wheel(str(metadata_root))
+            wheel = dist / sec_review_build.build_wheel(str(dist), metadata_directory=str(metadata_root))
+
+            prepared = {}
+            for path in (metadata_root / dist_info).rglob("*"):
+                if path.is_file():
+                    prepared[path.relative_to(metadata_root / dist_info).as_posix()] = path.read_bytes()
+
+            with zipfile.ZipFile(wheel) as archive:
+                wheel_metadata = {
+                    name.split("/", 1)[1]: archive.read(name)
+                    for name in archive.namelist()
+                    if name.startswith(dist_info + "/") and not name.endswith("/RECORD")
+                }
+
+            self.assertEqual(wheel_metadata, prepared)
+
+    def test_build_backend_rejects_symlinked_source_files(self):
+        import sec_review_build
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            clone = root / "clone"
+            shutil.copytree(ROOT, clone, symlinks=True, ignore=shutil.ignore_patterns(".git", "__pycache__"))
+            secret = root / "outside-secret.txt"
+            secret.write_text("must not be packaged")
+            target = clone / "sec_review" / "symlink_secret.py"
+            target.symlink_to(secret)
+
+            script = (
+                "from pathlib import Path; import sys; sys.path.insert(0, str(Path.cwd())); "
+                "import sec_review_build; "
+                "sec_review_build.build_wheel(str(Path('dist')))"
+            )
+            result = subprocess.run(
+                [sys.executable, "-I", "-c", script],
+                cwd=clone,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("Refusing symbolic-link build input", result.stderr + result.stdout)
 
     def test_build_backend_files_are_tracked_for_git_url_installs(self):
         for relative in ("sec_review_build.py", "scripts/build_dist.py"):

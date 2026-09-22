@@ -58,7 +58,7 @@ jobs:
           if len(wheels) != 1 or len(sdists) != 1:
               raise SystemExit(f'Expected one wheel and one sdist, found {wheels} and {sdists}')
 
-          blocked_dirs = {'.tools', '.runs', '.idea', '.git'}
+          blocked_dirs = {'.tools', '.runs', '.idea', '.git', '.worktrees'}
           allowed_credentials = (
               'examples/vulnerable/credentials.txt',
               'share/commitscope/examples/vulnerable/credentials.txt',
@@ -76,8 +76,12 @@ jobs:
               parts = normalized.split('/')
               if any(part in blocked_dirs for part in parts):
                   return 'state, IDE, or VCS directory'
+              if normalized.startswith('/') or '..' in parts:
+                  return 'unsafe archive path'
               if 'raw' in parts or parts[-1].endswith('.raw.json'):
                   return 'raw report'
+              if parts[-1] in ('report.json', 'report.md', 'report.sarif'):
+                  return 'generated report'
               if 'credentials' in parts[-1].lower() and not any(normalized.endswith(path) for path in allowed_credentials):
                   return 'credential-like file'
               return ''
