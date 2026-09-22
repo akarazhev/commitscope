@@ -7,3 +7,8 @@ __pycache__/
 .env.*
 reports/
 docs/security-review-pdfs/
+.worktrees/
+.superpowers/
+build/
+dist/
+*.egg-info/

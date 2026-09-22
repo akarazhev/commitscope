@@ -7,11 +7,17 @@ The `review.py demo` command and the live-scanners CI job use actual releases.
 from pathlib import Path
 import base64
 import hashlib
+import json
 import subprocess
 import sys
 import tempfile
 import unittest
 from unittest.mock import patch
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+from sec_review.core import trusted_internal_temp_path
+tempfile.tempdir = str(trusted_internal_temp_path(Path(tempfile.gettempdir())))
 
 DOUBLE = r'''
 import json, sys
@@ -64,6 +70,19 @@ class PipelineProtocolTests(unittest.TestCase):
         record=self.tools/'semgrep-env/lib/python3.14/site-packages/semgrep-1.177.0.dist-info/RECORD'
         record.parent.mkdir(parents=True)
         record.write_text(f'../../../bin/semgrep,sha256={digest},{wrapper.stat().st_size}\n')
+    def resources(self, name='resources', *, semgrep='1.177.0', gitleaks='8.30.1', trivy='0.74.0'):
+        resources=self.root/name
+        config=resources/'config'
+        config.mkdir(parents=True,exist_ok=True)
+        (config/'tools.lock.json').write_text(json.dumps({'schema_version':'selected','tools':{
+            'semgrep':{'version':semgrep},
+            'gitleaks':{'version':gitleaks},
+            'trivy':{'version':trivy}}}))
+        (config/'semgrep.yaml').write_text('rules: []\n')
+        (config/'gitleaks.toml').write_text('[allowlist]\ndescription = "test resource root"\n')
+        (config/'trivy.yaml').write_text('quiet: true\n')
+        (config/'selected-policy.txt').write_text('selected runtime config\n')
+        return resources
     def git(self,*args):
         return subprocess.check_output(['git','-C',str(self.repo),*args],stderr=subprocess.STDOUT).decode().strip()
     def test_successful_protocol_produces_three_report_formats(self):
@@ -72,6 +91,66 @@ class PipelineProtocolTests(unittest.TestCase):
         self.assertEqual(r['decision']['exit_code'],0,r)
         for p in ('report.json','report.md','report.sarif'): self.assertTrue((self.root/'out'/p).is_file())
         self.assertFalse((self.root/'out/.work').exists())
+    def test_policy_hashes_come_from_explicit_resources(self):
+        from sec_review.project import run_scan
+        resources=self.resources()
+        mismatched=self.resources('mismatched-resources',semgrep='0.0.0',gitleaks='0.0.0',trivy='0.0.0')
+        marker=resources/'config/selected-policy.txt'
+        with patch('sec_review.tools.current_resource_root',return_value=mismatched):
+            r=run_scan(self.repo,self.root/'out',tools_root=self.tools,resources=resources)
+        self.assertEqual(r['decision']['exit_code'],0,r)
+        self.assertEqual(r['policy']['tools']['schema_version'],'selected')
+        self.assertEqual(r['policy']['config_hashes']['selected-policy.txt'],
+                         hashlib.sha256(marker.read_bytes()).hexdigest())
+    def test_cli_scan_default_out_uses_operator_runs_root(self):
+        from sec_review import cli
+        with tempfile.TemporaryDirectory() as directory:
+            cwd=Path(directory).resolve()
+            captured={}
+            class FixedUUID:
+                hex='0123456789abcdef'
+            def fake_run_scan(repo,out,**kwargs):
+                captured['repo']=repo
+                captured['out']=out
+                captured['kwargs']=kwargs
+                return {'report':'ok'}
+            with patch('sec_review.cli.runs_root',return_value=cwd/'.runs',create=True), \
+                 patch('sec_review.cli.uuid.uuid4',return_value=FixedUUID()), \
+                 patch('sec_review.cli.run_scan',side_effect=fake_run_scan), \
+                 patch('sec_review.cli.decision',return_value={'status':'PASS','reasons':[],'exit_code':0}):
+                code=cli.main(['scan','--repo',str(self.repo)])
+        self.assertEqual(code,0)
+        self.assertEqual(captured['out'],(cwd/'.runs'/'scan-0123456789ab').absolute())
+    def test_cli_demo_rejects_user_created_symlink_output_parent(self):
+        from sec_review import cli
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory).resolve()
+            target=root/'target'; target.mkdir()
+            alias=root/'alias'; alias.symlink_to(target,target_is_directory=True)
+            calls=[]
+            def fake_demo(out,**kwargs):
+                calls.append((out,kwargs))
+                return 0,{'status':'APPLICATION_TESTS_PASSED_SCANNERS_NOT_RUN'}
+            with patch('sec_review.cli.demo',side_effect=fake_demo):
+                code=cli.main(['demo','--app-only','--out',str(alias/'demo-out')])
+        self.assertEqual(code,2)
+        self.assertEqual(calls,[])
+    def test_cli_demo_accepts_known_tmp_alias_output_parent(self):
+        from sec_review import cli
+        try:
+            expected=Path('/tmp').resolve(strict=True)/'commitscope-plan-app-only'
+        except OSError:
+            self.skipTest('/tmp is not available on this host')
+        captured={}
+        def fake_demo(out,**kwargs):
+            captured['out']=out
+            captured['kwargs']=kwargs
+            return 0,{'status':'APPLICATION_TESTS_PASSED_SCANNERS_NOT_RUN'}
+        with patch('sec_review.cli.demo',side_effect=fake_demo):
+            code=cli.main(['demo','--app-only','--out','/tmp/commitscope-plan-app-only'])
+        self.assertEqual(code,0)
+        self.assertEqual(captured['out'],expected)
+        self.assertTrue(captured['kwargs']['app_only'])
     def test_findings_are_collected_from_all_four_protocols(self):
         from sec_review.project import run_scan
         (self.repo/'vulnerable-marker.txt').write_text('synthetic only'); self.git('add','.'); self.git('commit','-qm','candidate fixture')
@@ -103,6 +182,14 @@ class PipelineProtocolTests(unittest.TestCase):
         from sec_review.project import run_scan
         from sec_review.core import ReviewError
         with self.assertRaises(ReviewError): run_scan(self.repo,self.repo/'out',tools_root=self.tools)
+    def test_report_directory_dotdot_resolving_inside_subject_is_rejected_before_creation(self):
+        from sec_review.project import run_scan
+        from sec_review.core import ReviewError
+        out=(self.root/'sibling'/'..'/'repo'/'dotdot-out').absolute()
+        resolved=self.repo/'dotdot-out'
+        with self.assertRaises(ReviewError):
+            run_scan(self.repo,out,tools_root=self.tools)
+        self.assertFalse(resolved.exists())
     def test_existing_report_is_not_overwritten(self):
         from sec_review.project import run_scan
         from sec_review.core import ReviewError

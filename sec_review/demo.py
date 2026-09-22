@@ -5,15 +5,17 @@ from pathlib import Path
 import shutil
 import subprocess
 import unittest
-from .core import ROOT, ReviewError, now, private_dir, write_json, write_text
+from .core import ReviewError, now, private_dir, write_json, write_text
+from .paths import current_resource_root
 from .project import run_scan
 from .reports import compare, decision
 
 
 def demo(out: Path, *, app_only: bool=False) -> tuple[int,dict]:
     private_dir(out,new=True)
+    resources = current_resource_root()
     stream=io.StringIO()
-    suite=unittest.defaultTestLoader.discover(str(ROOT/'tests'),pattern='test_demo_app.py')
+    suite=unittest.defaultTestLoader.discover(str(resources/'tests'),pattern='test_demo_app.py')
     result=unittest.TextTestRunner(stream=stream,verbosity=2).run(suite)
     text=stream.getvalue(); write_text(out/'application-tests.txt',text); print(text)
     summary={'at':now(),'application_tests':result.testsRun,'application_passed':result.wasSuccessful(),
@@ -29,16 +31,17 @@ def demo(out: Path, *, app_only: bool=False) -> tuple[int,dict]:
         if r.returncode: raise ReviewError('Demo Git operation failed: '+r.stderr)
         return r.stdout.strip()
     git('init','-q'); git('config','user.name','Security Review Demo'); git('config','user.email','demo@example.invalid')
-    for p in (ROOT/'examples/vulnerable').iterdir():
+    for p in (resources/'examples/vulnerable').iterdir():
         if p.is_file(): shutil.copyfile(p,repository/p.name)
     git('add','.'); git('commit','-qm','Synthetic vulnerable baseline'); bad_sha=git('rev-parse','HEAD')
-    before=run_scan(repository,out/'vulnerable-review',ref=bad_sha)
+    before=run_scan(repository,out/'vulnerable-review',ref=bad_sha,resources=resources)
     for p in repository.iterdir():
         if p.is_file(): p.unlink()
-    for p in (ROOT/'examples/fixed').iterdir():
+    for p in (resources/'examples/fixed').iterdir():
         if p.is_file(): shutil.copyfile(p,repository/p.name)
     git('add','-A'); git('commit','-qm','Remediate demonstration cases'); fixed_sha=git('rev-parse','HEAD')
     after=run_scan(repository,out/'fixed-review',ref=fixed_sha,base=bad_sha,
+                   resources=resources,
                    allow_empty_sca='The bundled fixed fixture uses only Python standard library; its unused requests dependency was removed.')
     tools={f['tool'] for f in before['findings']}
     expected={'semgrep','gitleaks','trivy-vuln','trivy-iac'}

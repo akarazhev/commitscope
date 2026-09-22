@@ -14,7 +14,8 @@ import shutil
 import tempfile
 from typing import Any
 
-from .core import ROOT, ReviewError, child_env, decode_json, execute
+from .core import ReviewError, child_env, decode_json, execute
+from .paths import current_resource_root
 
 AUTH_MODES = ('subscription', 'api')
 CREDENTIAL_ENV_KEYS = ('ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'CLAUDE_CODE_OAUTH_TOKEN')
@@ -51,8 +52,9 @@ def mode_flag(mode: str) -> str:
 
 def settings_flags(mode: str) -> list[str]:
     """Used for status and model calls; do not load unreviewed user/project settings."""
+    resources = current_resource_root()
     return [mode_flag(mode), '--setting-sources', '',
-            '--settings', str(ROOT / 'config/claude-settings.json')]
+            '--settings', str(resources / 'config/claude-settings.json')]
 
 
 def _credential(name: str) -> str | None:

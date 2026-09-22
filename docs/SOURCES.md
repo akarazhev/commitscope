@@ -63,3 +63,30 @@ https://github.com/aquasecurity/trivy/releases/tag/v0.74.0
 https://www.trivy.dev/docs/latest/getting-started/installation/
 https://docs.github.com/en/actions/reference/runners/github-hosted-runners
 https://github.com/actions/setup-python
+
+## Installable CLI and action sources — 2026-09-22
+
+Package metadata is local and source-controlled. `pyproject.toml` uses
+the in-tree `sec_review_build` backend with no external build requirements,
+dynamic version metadata from `sec_review.__version__`, and the
+`sec_review.cli:main` console entry point named `commitscope`. The package
+verification workflow runs `python -I scripts/build_dist.py --dist-dir dist` to
+create the wheel and source distribution without PyPI-hosted build tooling.
+
+The composite action interface is local in `action.yml`. It runs Python 3.14 through
+the pinned official `actions/setup-python` source and exposes validated inputs for
+`repo`, `ref`, `out`, `fail-on`, `timeout`, `offline`, and `allow-empty-sca`. Its
+documented outputs are `report-directory`, `report-json`, `report-markdown`,
+`report-sarif`, and `exit-code`.
+
+Official GitHub action source references recorded in local workflow/action metadata:
+
+- `actions/checkout` at commit `11bd71901bbe5b1630ceea73d27597364c9af683`
+  (`v4.2.2`) for trusted checkout steps.
+- `actions/setup-python` at commit `5fda3b95a4ea91299a34e894583c3862153e4b97`
+  (`v7.0.0`) for package/action Python installation.
+- `actions/upload-artifact` at commit `ea165f8d65b6e75b540449e92b4886f43607fa02`
+  (`v4.6.2`) for preserving normalized evidence in project workflows.
+- `github/codeql-action/upload-sarif` at commit
+  `3ea06614dafe36dec890db3446326e0d40ce53d4` (`v3`) in the documented consumer
+  example for optional SARIF upload.

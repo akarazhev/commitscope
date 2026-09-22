@@ -5,9 +5,11 @@ import json
 from pathlib import Path
 import shutil
 import sys
+import tempfile
 import uuid
 from . import __version__
-from .core import ROOT, ReviewError, read_json, write_json
+from .core import ReviewError, no_symlinks, read_json, write_json
+from .paths import runs_root
 from .tools import bootstrap, inspect_tools, platform_key, check_prerequisites
 from .project import run_scan
 from .reports import decision, compare
@@ -49,6 +51,44 @@ def ai_options(p, *, require_auth=False):
     p.add_argument('--max-turns',type=int,default=3,help='Turn limit per Claude call (1-20; default 3)')
     p.add_argument('--ai-timeout',type=int,default=240,help='Wall-clock seconds per Claude call (1-3600; default 240)')
 
+def _add_trusted_temp_alias(roots: list[tuple[Path, Path]], value: str | Path) -> None:
+    alias=Path(value).absolute()
+    try:
+        resolved=alias.resolve(strict=True)
+    except OSError:
+        return
+    if all(existing != alias for existing, _ in roots):
+        roots.append((alias,resolved))
+
+def _trusted_temp_alias_roots() -> list[tuple[Path, Path]]:
+    roots: list[tuple[Path, Path]] = []
+    for value in ('/tmp','/var/tmp'):
+        _add_trusted_temp_alias(roots,value)
+    temp_root=Path(tempfile.gettempdir()).absolute()
+    try:
+        no_symlinks(temp_root)
+    except ReviewError:
+        return roots
+    _add_trusted_temp_alias(roots,temp_root)
+    return roots
+
+def trusted_output_path(path: Path) -> Path:
+    path=path.absolute()
+    try:
+        no_symlinks(path)
+        return path
+    except ReviewError as error:
+        original=error
+    for alias,resolved_root in _trusted_temp_alias_roots():
+        try:
+            relative=path.relative_to(alias)
+        except ValueError:
+            continue
+        candidate=resolved_root/relative
+        no_symlinks(candidate)
+        return candidate
+    raise original
+
 def main(argv=None) -> int:
     args=parser().parse_args(argv)
     try:
@@ -71,7 +111,7 @@ def main(argv=None) -> int:
                 validate_ai_options(args.auth,args.budget_usd,args.max_turns,args.ai_timeout)
             elif args.auth is not None or args.budget_usd is not None:
                 raise ReviewError('--auth and --budget-usd on scan require --ai; scanners need no Claude credentials')
-            out=(args.out or ROOT/'.runs'/('scan-'+uuid.uuid4().hex[:12])).absolute()
+            out=trusted_output_path(args.out or runs_root()/('scan-'+uuid.uuid4().hex[:12]))
             r=run_scan(args.repo,out,ref=args.ref,base=args.base,timeout=args.timeout,offline=args.offline,
                        allow_empty_sca=args.allow_empty_sca,fail_on=args.fail_on)
             if args.ai: r=run_ai(out,allow_code_upload=True,model=args.model,budget_usd=args.budget_usd,auth_mode=args.auth,max_turns=args.max_turns,timeout=args.ai_timeout)
@@ -82,7 +122,7 @@ def main(argv=None) -> int:
             r=run_ai(args.run.absolute(),allow_code_upload=args.allow_code_upload,model=args.model,budget_usd=args.budget_usd,auth_mode=args.auth,max_turns=args.max_turns,timeout=args.ai_timeout)
             d=decision(r); print(f'{d["status"]}: {args.run / "report.md"}'); return d['exit_code']
         if args.command=='demo':
-            out=(args.out or ROOT/'.runs'/('demo-'+uuid.uuid4().hex[:12])).absolute()
+            out=trusted_output_path(args.out or runs_root()/('demo-'+uuid.uuid4().hex[:12]))
             code,summary=demo(out,app_only=args.app_only)
             print(json.dumps(summary,indent=2)); print('Demo artifacts:',out); return code
         if args.command=='compare':

@@ -11,6 +11,11 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+from sec_review.core import trusted_internal_temp_path
+tempfile.tempdir = str(trusted_internal_temp_path(Path(tempfile.gettempdir())))
+
 class CoreTests(unittest.TestCase):
     def test_json_duplicate_keys_rejected(self):
         from sec_review.core import decode_json, ReviewError
@@ -172,6 +177,14 @@ class InstallerTests(unittest.TestCase):
                 entry=l['tools'][tool]['assets'][platform]
                 self.assertRegex(entry['sha256'],r'^[0-9a-f]{64}$')
                 self.assertTrue(entry['url'].startswith('https://'))
+    def test_tool_lock_can_be_read_from_selected_resources(self):
+        from sec_review.tools import lock
+        with tempfile.TemporaryDirectory() as directory:
+            resources = Path(directory).resolve()
+            config = resources / 'config'
+            config.mkdir()
+            (config / 'tools.lock.json').write_text('{"schema_version":"selected","tools":{}}')
+            self.assertEqual(lock(resources)['schema_version'], 'selected')
     def test_semgrep_doctor_uses_package_and_core_versions_when_wrapper_is_stale(self):
         from sec_review.tools import inspect_tools
         with tempfile.TemporaryDirectory() as d:
@@ -209,3 +222,80 @@ class InstallerTests(unittest.TestCase):
             record.parent.mkdir(parents=True)
             record.write_text('../../../bin/semgrep,sha256=original-wheel-wrapper,999\n')
             self.assertFalse(inspect_tools(root)['semgrep']['ok'])
+    def test_bootstrap_lock_error_mentions_actual_lock_path(self):
+        from sec_review.tools import bootstrap
+        from sec_review.core import ReviewError
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d)
+            marker=root/'.bootstrap-lock'
+            marker.mkdir()
+            with patch('sec_review.tools.check_prerequisites',return_value={'platform':'linux-x86_64'}):
+                with self.assertRaises(ReviewError) as caught:
+                    bootstrap(root)
+            message=str(caught.exception)
+            self.assertIn(str(marker),message)
+            self.assertNotIn('.tools/.bootstrap-lock',message)
+    def test_bootstrap_semgrep_failure_mentions_actual_log_path(self):
+        from sec_review.tools import bootstrap
+        from sec_review.core import ProcessResult, ReviewError
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d)/'scanner-home'
+            resources=Path(d)/'resources'
+            config=resources/'config'
+            config.mkdir(parents=True)
+            spec={'schema_version':'selected','tools':{
+                'gitleaks':{'version':'8.30.1','assets':{'linux-x86_64':{'filename':'gitleaks.tgz'}}},
+                'trivy':{'version':'0.74.0','assets':{'linux-x86_64':{'filename':'trivy.tgz'}}},
+                'semgrep':{'version':'1.177.0','assets':{'linux-x86_64':{'filename':'semgrep.whl'}}}}}
+            (config/'tools.lock.json').write_text(json.dumps(spec))
+            def fake_download(asset,directory):
+                path=directory/asset['filename']
+                path.write_text('downloaded')
+                return path
+            with patch('sec_review.tools.check_prerequisites',return_value={'platform':'linux-x86_64'}), \
+                 patch('sec_review.tools.current_resource_root',return_value=resources), \
+                 patch('sec_review.tools.download',side_effect=fake_download), \
+                 patch('sec_review.tools.extract_binary'), \
+                 patch('sec_review.tools.venv.EnvBuilder.create'), \
+                 patch('sec_review.tools.execute',return_value=ProcessResult(1,'pip stdout','pip stderr',0)):
+                with self.assertRaises(ReviewError) as caught:
+                    bootstrap(root)
+            message=str(caught.exception)
+            log=root/'semgrep-install.log'
+            self.assertIn(str(log),message)
+            self.assertNotIn('.tools/semgrep-install.log',message)
+            self.assertEqual(log.read_text(),'pip stdout\npip stderr')
+    def test_bootstrap_success_prints_installed_cli_doctor_command(self):
+        from sec_review.tools import bootstrap
+        from sec_review.core import ProcessResult
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d)/'scanner-home'
+            resources=Path(d)/'resources'
+            config=resources/'config'
+            config.mkdir(parents=True)
+            spec={'schema_version':'selected','tools':{
+                'gitleaks':{'version':'8.30.1','assets':{'linux-x86_64':{'filename':'gitleaks.tgz'}}},
+                'trivy':{'version':'0.74.0','assets':{'linux-x86_64':{'filename':'trivy.tgz'}}},
+                'semgrep':{'version':'1.177.0','assets':{'linux-x86_64':{'filename':'semgrep.whl'}}}}}
+            (config/'tools.lock.json').write_text(json.dumps(spec))
+            def fake_download(asset,directory):
+                path=directory/asset['filename']
+                path.write_text('downloaded')
+                return path
+            checks={name:{'ok':True} for name in ('semgrep','gitleaks','trivy')}
+            stdout=io.StringIO()
+            with patch('sec_review.tools.check_prerequisites',return_value={'platform':'linux-x86_64'}), \
+                 patch('sec_review.tools.current_resource_root',return_value=resources), \
+                 patch('sec_review.tools.download',side_effect=fake_download), \
+                 patch('sec_review.tools.extract_binary'), \
+                 patch('sec_review.tools.venv.EnvBuilder.create'), \
+                 patch('sec_review.tools.execute',side_effect=[
+                     ProcessResult(0,'pip ok','',0),
+                     ProcessResult(0,'freeze ok','',0),
+                 ]), \
+                 patch('sec_review.tools.inspect_tools',return_value=checks), \
+                 patch('sys.stdout',stdout):
+                bootstrap(root)
+            output=stdout.getvalue()
+            self.assertIn('commitscope doctor',output)
+            self.assertNotIn('review.py doctor',output)

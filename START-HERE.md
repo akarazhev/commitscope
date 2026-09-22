@@ -8,6 +8,35 @@ older release.
 This project is scanner-ready source, not a certified production gate. Scanner-only
 readiness does not require Claude Code. Native Windows is outside scope.
 
+## Choose An Install Path
+
+GitHub-hosted pipx installation:
+
+```bash
+pipx install "git+https://github.com/akarazhev/commitscope.git@v2.3.0"
+commitscope preflight
+commitscope bootstrap
+commitscope doctor
+```
+
+Upgrade to the same immutable release tag:
+
+```bash
+pipx upgrade commitscope
+```
+
+Source checkout remains supported:
+
+```bash
+python3 -I review.py doctor
+```
+
+For source checkouts, scanners live in `.tools/`. For installed CLI runs, set an
+absolute `COMMITSCOPE_HOME` to use `$COMMITSCOPE_HOME/tools`; otherwise macOS uses
+`~/Library/Caches/CommitScope/tools`, Linux uses `$XDG_CACHE_HOME/commitscope/tools`
+when set, and Linux otherwise uses `~/.cache/commitscope/tools`. Default output
+directories are under `.runs/` relative to the current directory.
+
 ## 1. Check Host Prerequisites
 
 Supported hosts are macOS or glibc Linux on x86_64/ARM64 with Python 3.11-3.14,
@@ -23,6 +52,10 @@ sudo apt-get install -y python3 python3-venv git ca-certificates curl unzip
 Use your normal unprivileged OS user after any administrator package installation.
 
 ```bash
+# Installed CLI
+commitscope preflight
+
+# Source checkout
 python3 -I review.py preflight
 ```
 
@@ -33,13 +66,18 @@ make model requests.
 ## 2. Install Pinned Scanners
 
 ```bash
+# Installed CLI
+commitscope bootstrap
+commitscope doctor
+
+# Source checkout
 sh scripts/bootstrap.sh
 python3 -I review.py doctor
 ```
 
 The bootstrap installs Semgrep 1.177.0, Gitleaks 8.30.1, and Trivy 0.74.0 into
-`.tools/` only. It verifies pinned SHA256 values and reported versions. It never uses
-`sudo` and never installs target application dependencies.
+the selected scanner cache only. It verifies pinned SHA256 values and reported
+versions. It never uses `sudo` and never installs target application dependencies.
 
 If your interpreter is not `python3`, set it explicitly:
 
@@ -86,7 +124,23 @@ Read:
 Exit 0 means scanner policy pass for the selected threshold only. Exit 1 means
 findings need triage. Exit 2 means incomplete evidence or failed prerequisites.
 
-## 5. Optional Claude Code Verification
+## 5. Use GitHub Actions As A Consumer
+
+Start from `docs/examples/commitscope.yml` in the repository that should run the
+scanner evidence workflow:
+
+```yaml
+uses: akarazhev/commitscope@v2.3.0
+```
+
+The example uses full commit SHAs for third-party actions and a readable `v2.3.0`
+tag for CommitScope. If your policy requires immutable action source, replace the
+tag with a reviewed full commit SHA. The action has no AI mode, does not upload
+source to an AI service, and does not build the target or install target
+dependencies. SARIF upload needs `security-events: write`; fork pull requests can
+lose that permission, so preserve the uploaded report artifact.
+
+## 6. Optional Claude Code Verification
 
 Claude Code is optional AI verification. It is not required for scanner-only
 readiness and does not make CommitScope an official Anthropic product.
@@ -126,7 +180,7 @@ python3 -I review.py ai \
 AI commands send selected source excerpts to Anthropic and may use subscription quota
 or API budget. CommitScope never falls back between subscription and API modes.
 
-## 6. Keep Evidence Out Of Git
+## 7. Keep Evidence Out Of Git
 
 `.tools/`, `.runs/`, `reports/`, `.env*`, and real secrets are ignored and must stay
 out of commits. Treat run directories as confidential.

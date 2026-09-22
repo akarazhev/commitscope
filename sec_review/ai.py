@@ -4,7 +4,8 @@ import json
 from pathlib import Path
 import re
 import tempfile
-from .core import ROOT, ReviewError, execute, read_json, write_json, write_text, now
+from .core import ReviewError, execute, read_json, write_json, write_text, now
+from .paths import current_resource_root
 from .snapshot import export_snapshot
 from .reports import save_reports
 from .scanners import finding
@@ -18,14 +19,15 @@ def claude_command(executable: str, stage: str, model: str, budget: float | None
         raise ReviewError('Unknown AI stage')
     if auth_mode == 'subscription' and budget is not None:
         raise ReviewError('A USD budget is not supported in subscription mode')
+    resources = current_resource_root()
     cmd = [executable, *settings_flags(auth_mode), '-p',
            'Analyze the JSON review packet from stdin using the required schema.',
            '--tools', '', '--disallowedTools', '*', '--disable-slash-commands',
-           '--strict-mcp-config', '--mcp-config', str(ROOT / 'config/empty-mcp.json'),
+           '--strict-mcp-config', '--mcp-config', str(resources / 'config/empty-mcp.json'),
            '--no-session-persistence',
-           '--system-prompt-file', str(ROOT / 'prompts' / f'{stage}.md'),
+           '--system-prompt-file', str(resources / 'prompts' / f'{stage}.md'),
            '--output-format', 'json', '--json-schema',
-           json.dumps(read_json(ROOT / 'config' / f'{stage}.schema.json')),
+           json.dumps(read_json(resources / 'config' / f'{stage}.schema.json')),
            '--max-turns', str(max_turns), '--model', model]
     if auth_mode == 'api':
         if budget is None or not 0 < budget <= 100:
@@ -67,6 +69,7 @@ def validate_verifier(obj: dict, ids: list[str]) -> None:
     if len(seen)!=len(ids) or set(seen)!=set(ids) or len(set(seen))!=len(seen): raise ReviewError('Verifier must cover every candidate exactly once')
 
 def make_packet(source: Path, report: dict, max_bytes: int=160000) -> dict:
+    resources = current_resource_root()
     secret_paths={f['path'] for f in report['findings'] if f['tool']=='gitleaks'}
     preferred=set(report['snapshot'].get('changed_files',[])) | {f['path'] for f in report['findings'] if f.get('tool')!='gitleaks'}
     paths=sorted((p for p in source.rglob('*') if p.is_file()),key=lambda p:(p.relative_to(source).as_posix() not in preferred,p.as_posix()))
@@ -90,7 +93,7 @@ def make_packet(source: Path, report: dict, max_bytes: int=160000) -> dict:
     return {'head':report['snapshot']['head'],'files':files,'omitted':omitted,'source_bytes':used,
             'scanner_findings':report['findings'],
             'context_note':'Only supplied files can be examined. No tools, tests or runtime access. Omitted context limits conclusions.',
-            'project_context':(ROOT/'config/project-context.md').read_text(encoding='utf-8')}
+            'project_context':(resources/'config/project-context.md').read_text(encoding='utf-8')}
 
 def run_ai(out: Path, *, auth_mode: str | None=None, allow_code_upload: bool=False, model: str='sonnet', budget_usd: float | None=None, timeout: int=240, max_turns: int=3) -> dict:
     if not allow_code_upload: raise ReviewError('AI review sends source excerpts to Anthropic. Pass --allow-code-upload only after approving this data transfer.')

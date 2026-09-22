@@ -1,0 +1,65 @@
+name: CommitScope Security Review
+description: Run CommitScope scanner checks and expose normalized report paths.
+inputs:
+  repo:
+    description: Existing Git checkout within the caller workspace or runner temp.
+    required: false
+    default: ''
+  ref:
+    description: Full commit SHA or explicitly selected local ref to scan.
+    required: false
+    default: ''
+  out:
+    description: Report directory under runner temp; defaults to a CommitScope run directory.
+    required: false
+    default: ''
+  fail-on:
+    description: Finding threshold that fails the scan.
+    required: false
+    default: high
+  timeout:
+    description: Scanner timeout in seconds.
+    required: false
+    default: '360'
+  offline:
+    description: Use cached Trivy database and avoid online updates.
+    required: false
+    default: 'false'
+  allow-empty-sca:
+    description: Optional owner declaration when the target has no third-party dependencies.
+    required: false
+    default: ''
+outputs:
+  report-directory:
+    description: Directory containing CommitScope reports.
+    value: ${{ steps.scan.outputs.report-directory }}
+  report-json:
+    description: JSON report path.
+    value: ${{ steps.scan.outputs.report-json }}
+  report-markdown:
+    description: Markdown report path.
+    value: ${{ steps.scan.outputs.report-markdown }}
+  report-sarif:
+    description: SARIF report path.
+    value: ${{ steps.scan.outputs.report-sarif }}
+  exit-code:
+    description: CommitScope exit code.
+    value: ${{ steps.scan.outputs.exit-code }}
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+      with:
+        python-version: '3.14'
+    - id: scan
+      shell: bash
+      env:
+        COMMITSCOPE_HOME: ${{ runner.temp }}/commitscope-home
+        INPUT_REPO: ${{ inputs.repo }}
+        INPUT_REF: ${{ inputs.ref }}
+        INPUT_OUT: ${{ inputs.out }}
+        INPUT_FAIL_ON: ${{ inputs.fail-on }}
+        INPUT_TIMEOUT: ${{ inputs.timeout }}
+        INPUT_OFFLINE: ${{ inputs.offline }}
+        INPUT_ALLOW_EMPTY_SCA: ${{ inputs.allow-empty-sca }}
+      run: python -I "$GITHUB_ACTION_PATH/scripts/action_runner.py"

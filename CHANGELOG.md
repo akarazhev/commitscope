@@ -1,5 +1,31 @@
 # Changelog
 
+## 2.3.0 — 2026-09-22
+
+Installable CLI and composite GitHub Action release.
+
+- Add GitHub-hosted `pipx` installation guidance for the versioned `v2.3.0`
+  source ref while keeping source checkout execution with `python3 -I review.py`
+  compatible for existing operators.
+- Package the CommitScope console script as `commitscope` with no runtime Python
+  dependencies beyond the standard library.
+- Include runtime data in the wheel and source distribution: scanner lock/config
+  files, prompts, fixed/vulnerable examples, and the demo application test.
+- Separate read-only packaged resources from mutable scanner state. Source
+  checkouts keep scanners under `.tools`; installed CLI runs use an absolute
+  `COMMITSCOPE_HOME` when set, otherwise the platform cache path.
+- Add a scanner-only composite GitHub Action with validated `repo`, `ref`, `out`,
+  `fail-on`, `timeout`, `offline`, and `allow-empty-sca` inputs.
+- Expose action outputs for the report directory, JSON report, Markdown report,
+  SARIF report, and CommitScope exit code.
+- Expand verification workflow definitions to build/install the package, inspect
+  distribution archive contents, smoke-test the clean installed CLI, and run a
+  consumer action fixture.
+
+**Qualification:** scanner-ready is not production certification. Live AI
+acceptance was not run, native Windows remains out of scope, and scanner databases
+and behavior remain time-dependent.
+
 ## 2.2.0 — 2026-09-21
 
 Scanner-ready CommitScope rebrand and portability hardening.
