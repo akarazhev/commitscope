@@ -1,6 +1,7 @@
 [build-system]
-requires = ["setuptools==80.9.0"]
-build-backend = "setuptools.build_meta"
+requires = []
+build-backend = "sec_review_build"
+backend-path = ["."]
 
 [project]
 name = "commitscope"
@@ -32,14 +33,13 @@ Issues = "https://github.com/akarazhev/commitscope/issues"
 [project.scripts]
 commitscope = "sec_review.cli:main"
 
-[tool.setuptools]
+[tool.commitscope-build]
 packages = ["sec_review"]
-include-package-data = false
 
-[tool.setuptools.dynamic]
+[tool.commitscope-build.dynamic]
 version = {attr = "sec_review.__version__"}
 
-[tool.setuptools.data-files]
+[tool.commitscope-build.data-files]
 "share/commitscope/config" = [
   "config/claude-settings.json",
   "config/claude.version",

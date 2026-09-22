@@ -67,10 +67,11 @@ https://github.com/actions/setup-python
 ## Installable CLI and action sources — 2026-09-22
 
 Package metadata is local and source-controlled. `pyproject.toml` uses
-`setuptools.build_meta` with `setuptools==80.9.0`, dynamic version metadata from
-`sec_review.__version__`, and the `sec_review.cli:main` console entry point named
-`commitscope`. The package verification workflow installs `build==1.3.0` and runs
-`python -m build` to create the wheel and source distribution.
+the in-tree `sec_review_build` backend with no external build requirements,
+dynamic version metadata from `sec_review.__version__`, and the
+`sec_review.cli:main` console entry point named `commitscope`. The package
+verification workflow runs `python -I scripts/build_dist.py --dist-dir dist` to
+create the wheel and source distribution without PyPI-hosted build tooling.
 
 The composite action interface is local in `action.yml`. It runs Python 3.14 through
 the pinned official `actions/setup-python` source and exposes validated inputs for

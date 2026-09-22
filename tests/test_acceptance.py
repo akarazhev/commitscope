@@ -36,13 +36,14 @@ class AcceptanceTests(unittest.TestCase):
         workflow = (ROOT / '.github/workflows/verify.yml').read_text()
         for expected in (
             'name: Package install (${{ matrix.os }}, Python ${{ matrix.python-version }})',
-            'python -m build',
+            'python -I scripts/build_dist.py --dist-dir dist',
             'commitscope demo --app-only',
             'name: Consumer action (ubuntu-24.04, Python 3.14)',
             'uses: ./',
             'report.sarif',
         ):
             self.assertIn(expected, workflow)
+        self.assertNotIn('pip install build', workflow)
     def test_ci_docs_list_all_required_verify_checks(self):
         ci = (ROOT / 'docs/CI.md').read_text()
         self.assertNotIn('two required layers', ci)

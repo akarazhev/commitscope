@@ -40,11 +40,11 @@ Source demo evidence path: `.runs/v2.3-source-demo`.
 
 | Command | Observed result |
 |---|---|
-| `/tmp/commitscope-build-env/bin/python -m build` without network escalation | Failed because the isolated build environment could not resolve `pypi.org` to install `setuptools==80.9.0`. |
-| `/tmp/commitscope-build-env/bin/python -m build` with network escalation | Passed; built `dist/commitscope-2.3.0.tar.gz` and `dist/commitscope-2.3.0-py3-none-any.whl`. |
-| `shasum -a 256 dist/commitscope-2.3.0-py3-none-any.whl dist/commitscope-2.3.0.tar.gz` | Wheel: `9cc632182ca4df8affd40314da93e05ae61856a5ff4f349184085e9380cbc560`; sdist: `e671e9662b99add4ae558392058c0c4e4d184d42f07171b6a0fbc0e21c0a7e85`. |
+| `python3 -I scripts/build_dist.py --dist-dir /tmp/commitscope-build2-4oxGeL/dist` | Passed without PyPI or external build tooling; built `commitscope-2.3.0.tar.gz` and `commitscope-2.3.0-py3-none-any.whl`. |
+| `python3 -I -m zipfile -l /tmp/commitscope-build2-4oxGeL/dist/commitscope-2.3.0-py3-none-any.whl` | Passed; wheel includes `sec_review`, console metadata, and `share/commitscope/{config,prompts,examples,tests}` runtime resources. |
+| `/tmp/commitscope-build2-4oxGeL/sdist-env/bin/python -m pip install --no-index --no-deps /tmp/commitscope-build2-4oxGeL/dist/commitscope-2.3.0.tar.gz` | Passed; pip built the wheel from the sdist through the in-tree backend without downloading build dependencies. |
 | `python3 -m venv /tmp/commitscope-230-env` | Passed; created the clean install environment. |
-| `/tmp/commitscope-230-env/bin/python -m pip install --no-index --no-deps dist/commitscope-2.3.0-py3-none-any.whl` | Passed; installed `commitscope-2.3.0` from the local wheel. |
+| `/tmp/commitscope-230-env/bin/python -m pip install --no-index --no-deps /tmp/commitscope-build2-4oxGeL/dist/commitscope-2.3.0-py3-none-any.whl` | Passed; installed `commitscope-2.3.0` from the local wheel. |
 | From `/tmp`: `/tmp/commitscope-230-env/bin/commitscope preflight` | Passed with `HOST_PREREQUISITES_PASSED`; Python 3.14.6, `darwin-arm64`, Git 2.50.1, venv with pip available. |
 | From `/tmp`: `/tmp/commitscope-230-env/bin/commitscope demo --app-only --out /tmp/commitscope-230-demo` | Passed: 8 application tests ran, `APPLICATION_TESTS_PASSED_SCANNERS_NOT_RUN`; scanner integration and AI integration were `not_run`. |
 
