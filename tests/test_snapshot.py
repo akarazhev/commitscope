@@ -17,6 +17,29 @@ class SnapshotTests(unittest.TestCase):
         self.assertEqual(meta['head'],self.git('rev-parse','HEAD'))
         self.assertEqual((self.root/'snapshot/app.py').read_text(),'print("hello")\n')
         self.assertEqual(meta['file_count'],1)
+    def test_commit_replacement_cannot_change_exact_snapshot(self):
+        from sec_review.snapshot import export_snapshot, resolve_exact_commit
+        original = self.git('rev-parse', 'HEAD')
+        (self.repo/'app.py').write_text('replacement commit\n')
+        self.git('commit', '-qam', 'replacement')
+        replacement = self.git('rev-parse', 'HEAD')
+        self.git('replace', original, replacement)
+        self.assertEqual(resolve_exact_commit(self.repo, original), original)
+        meta = export_snapshot(self.repo, self.root/'snapshot', ref=original)
+        self.assertEqual(meta['head'], original)
+        self.assertEqual((self.root/'snapshot/app.py').read_text(), 'print("hello")\n')
+
+    def test_blob_replacement_cannot_change_exact_snapshot(self):
+        from sec_review.snapshot import export_snapshot
+        original = self.git('rev-parse', 'HEAD')
+        blob = self.git('rev-parse', 'HEAD:app.py')
+        replacement = subprocess.check_output(
+            ['git', '-C', str(self.repo), 'hash-object', '-w', '--stdin'],
+            input=b'replacement blob\n').decode().strip()
+        self.git('replace', blob, replacement)
+        meta = export_snapshot(self.repo, self.root/'snapshot', ref=original)
+        self.assertEqual(meta['head'], original)
+        self.assertEqual((self.root/'snapshot/app.py').read_text(), 'print("hello")\n')
     def test_dirty_tree_rejected(self):
         from sec_review.snapshot import export_snapshot
         from sec_review.core import ReviewError

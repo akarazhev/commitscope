@@ -12,7 +12,7 @@ EXCLUDED_DIRS={'.tools','.runs','.venv','venv','node_modules','vendor','dist','b
 def git(repo: Path, *args: str) -> bytes:
     exe=shutil.which('git')
     if not exe: raise ReviewError('Git is required')
-    cmd=[exe,'-c','core.fsmonitor=false','-c','core.hooksPath='+os.devnull,
+    cmd=[exe,'--no-replace-objects','-c','core.fsmonitor=false','-c','core.hooksPath='+os.devnull,
          '-c','core.pager=cat','-c','core.quotepath=false','-C',str(repo),*args]
     try:
         result=subprocess.run(cmd,env=child_env(repo.parent),stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=60,check=False)
