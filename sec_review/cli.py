@@ -54,6 +54,8 @@ def parser() -> argparse.ArgumentParser:
     r.add_argument('--out',type=Path,required=True)
     r.add_argument('--auth',choices=('account',),required=True)
     r.add_argument('--allow-code-upload',action='store_true')
+    r.add_argument('--allow-empty-sca',default='',metavar='REASON',
+                   help='Explicit owner declaration when there are no third-party dependencies')
     r.add_argument('--model',required=True)
     r.add_argument('--timeout',type=int,default=360)
     r.add_argument('--ai-timeout',type=int,default=240)
@@ -121,7 +123,7 @@ def main(argv=None) -> int:
                 raise ReviewError('--timeout must be from 30 to 3600 seconds')
             request=validate_review_request(args.repo,args.ref,args.policy,args.out)
             r=run_review(request,model=args.model,timeout=args.ai_timeout,max_turns=args.max_turns,
-                         scanner_timeout=args.timeout)
+                         scanner_timeout=args.timeout,allow_empty_sca=args.allow_empty_sca)
             print(f'{r["decision"]["status"]}: {args.out / "report.md"}')
             for reason in r['decision']['reasons']: print(reason)
             return r['decision']['exit_code']

@@ -4,10 +4,13 @@ import io
 import json
 import os
 from pathlib import Path
+import signal
 import subprocess
 import sys
 import tarfile
 import tempfile
+import threading
+import time
 import unittest
 from unittest.mock import patch
 
@@ -44,6 +47,37 @@ class CoreTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             r = execute([sys.executable, '-I', '-c', 'import time;time.sleep(10)'], Path(d), child_env(Path(d)), .1)
             self.assertTrue(r.timed_out); self.assertNotEqual(r.code, 0)
+    @unittest.skipUnless(os.name == 'posix', 'process-group interrupt behavior is POSIX-specific')
+    def test_keyboard_interrupt_terminates_and_reaps_child(self):
+        from sec_review.core import execute, child_env
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            pid_file = root / 'child.pid'
+            code = ('import os,pathlib,sys,time; '
+                    'pathlib.Path(sys.argv[1]).write_text(str(os.getpid())); time.sleep(30)')
+            timer = threading.Timer(.5, lambda: os.kill(os.getpid(), signal.SIGINT))
+            timer.start()
+            try:
+                with self.assertRaises(KeyboardInterrupt):
+                    execute([sys.executable, '-I', '-c', code, str(pid_file)], root, child_env(root), 10)
+                self.assertTrue(pid_file.is_file(), 'sleeping child did not start before the interrupt')
+                pid = int(pid_file.read_text())
+                deadline = time.monotonic() + 2
+                while time.monotonic() < deadline:
+                    try:
+                        os.kill(pid, 0)
+                    except ProcessLookupError:
+                        break
+                    time.sleep(.02)
+                else:
+                    self.fail('interrupted execute left its child process running')
+            finally:
+                timer.cancel()
+                if pid_file.is_file():
+                    try:
+                        os.kill(int(pid_file.read_text()), signal.SIGKILL)
+                    except ProcessLookupError:
+                        pass
     def test_shell_metacharacters_are_data(self):
         from sec_review.core import execute, child_env
         with tempfile.TemporaryDirectory() as d:

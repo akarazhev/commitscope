@@ -97,10 +97,14 @@ class ReviewFixture(unittest.TestCase):
         stack.enter_context(patch('sec_review.ai.prepare_account_claude', side_effect=prepared))
         return stack
 
-    def run_review(self):
+    def run_review(self, **options):
         from sec_review.corporate import run_review
         with self.doubles():
-            return run_review(self.request(), model=MODEL, timeout=240, max_turns=3)
+            return run_review(self.request(), model=MODEL, timeout=240, max_turns=3, **options)
+
+    def empty_sca_inventory(self, name, payload):
+        if name == 'trivy-vuln':
+            payload['Results'] = [{'Target': 'app.py', 'Packages': [], 'Vulnerabilities': []}]
 
     def add_candidates(self):
         self.hunter['findings'] = [candidate(1), candidate(2), candidate(3)]
@@ -173,6 +177,23 @@ class CorporateReviewTests(ReviewFixture):
         self.assertEqual(self.events, NAMES)
         self.assertFalse((self.out / 'private/ai-input/packet.json').exists())
 
+    def test_empty_sca_remains_incomplete_by_default(self):
+        self.scanner_payload_edit = self.empty_sca_inventory
+        report = self.run_review()
+        trivy = next(item for item in report['scanners'] if item['name'] == 'trivy-vuln')
+        self.assertEqual(trivy['status'], 'incomplete')
+        self.assertEqual(self.events, NAMES)
+
+    def test_explicit_empty_sca_reason_is_recorded_and_ai_runs(self):
+        reason = 'Synthetic stdlib-only fixture has no third-party dependencies.'
+        self.scanner_payload_edit = self.empty_sca_inventory
+        report = self.run_review(allow_empty_sca=reason)
+        trivy = next(item for item in report['scanners'] if item['name'] == 'trivy-vuln')
+        self.assertEqual(trivy['status'], 'not_applicable')
+        self.assertEqual(trivy['reason'], 'Explicit owner declaration: ' + reason)
+        self.assertEqual(self.events, NAMES + ['hunter', 'verifier'])
+        self.assertEqual(report['decision']['exit_code'], 0)
+
     def test_claude_failure_is_incomplete(self):
         self.claude_failure = True
         self.assertEqual(self.run_review()['decision']['exit_code'], 2)
@@ -238,6 +259,16 @@ class CorporateReviewTests(ReviewFixture):
                 run.assert_not_called()
         with self.doubles():
             self.assertEqual(cli.main(arguments), 0)
+
+    def test_cli_forwards_explicit_empty_sca_reason(self):
+        reason = 'Synthetic stdlib-only fixture has no third-party dependencies.'
+        arguments = ['review', '--repo', str(self.repo), '--ref', self.git('rev-parse', 'HEAD'),
+                     '--policy', str(self.policy_path), '--out', str(self.out), '--auth', 'account',
+                     '--allow-code-upload', '--allow-empty-sca', reason, '--model', MODEL]
+        result = {'decision': {'status': 'READY_FOR_HUMAN_REVIEW', 'exit_code': 0, 'reasons': []}}
+        with patch('sec_review.cli.run_review', return_value=result) as run:
+            self.assertEqual(cli.main(arguments), 0)
+        self.assertEqual(run.call_args.kwargs['allow_empty_sca'], reason)
 
     def test_corporate_scan_defers_reports_and_precreates_private_raw_files(self):
         self.assert_private_raw = True

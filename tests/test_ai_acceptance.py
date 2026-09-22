@@ -72,6 +72,10 @@ class AIAcceptanceTests(unittest.TestCase):
             calls.append(command)
             self.assertEqual(command[3], "review")
             self.assertIn("--allow-code-upload", command)
+            self.assertEqual(
+                command[command.index("--allow-empty-sca") + 1],
+                module.EMPTY_SCA_REASON,
+            )
             self.assertEqual(command[command.index("--auth") + 1], "account")
             self.assertEqual(command[command.index("--model") + 1], MODEL)
             repo = Path(command[command.index("--repo") + 1])
@@ -133,6 +137,8 @@ class AIAcceptanceTests(unittest.TestCase):
         self.assertTrue(all(path.is_dir() for path in outputs))
         self.assertTrue(all(stat.S_IMODE(path.stat().st_mode) == 0o700 for path in outputs))
         self.assertEqual(len(result["comparisons"]), 3)
+        self.assertEqual(len(result["runs"]), 6)
+        self.assertTrue(all(item["status"] == "complete" for item in result["runs"]))
         self.assertTrue(all(item["detection"] is True for item in result["comparisons"]))
         self.assertTrue(all(item["false_positives"] == 0 for item in result["comparisons"]))
         self.assertTrue(all(item["latency_seconds"] >= 0 for item in result["comparisons"]))
@@ -146,6 +152,53 @@ class AIAcceptanceTests(unittest.TestCase):
         saved = json.loads((self.out / "acceptance.json").read_text())
         self.assertEqual(saved, result)
         self.assertEqual(stat.S_IMODE((self.out / "acceptance.json").stat().st_mode), 0o600)
+
+    def test_interruption_preserves_completed_and_started_variant_checkpoints(self):
+        module = load_harness()
+        calls = []
+
+        def interrupt_after_vulnerable(command, cwd, env, timeout):
+            calls.append(command)
+            output = Path(command[command.index("--out") + 1])
+            commit = command[command.index("--ref") + 1]
+            if "fixed" in output.name:
+                raise KeyboardInterrupt()
+            output.mkdir(mode=0o700)
+            report = {
+                "snapshot": {"head": commit},
+                "decision": {"status": "FINDINGS_REQUIRE_TRIAGE", "exit_code": 1},
+                "ai": {
+                    "status": "complete",
+                    "model_requested": MODEL,
+                    "authentication": {"claude_version": "2.1.999"},
+                    "limitations": ["Synthetic protocol response; no source was uploaded."],
+                },
+                "findings": [{"tool": "claude", "severity": "high", "title": "Expected"}],
+            }
+            (output / "report.json").write_text(json.dumps(report))
+            return module.ProcessResult(1, "", "", 0.125)
+
+        code, result = module.run_acceptance(
+            self.out,
+            model=MODEL,
+            allow_code_upload=True,
+            review_runner=interrupt_after_vulnerable,
+        )
+
+        self.assertEqual(code, 2)
+        self.assertEqual(result["status"], "INCOMPLETE")
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(len(result["runs"]), 2)
+        vulnerable, fixed = result["runs"]
+        self.assertEqual(vulnerable["status"], "complete")
+        self.assertEqual(vulnerable["exit_code"], 1)
+        self.assertEqual(vulnerable["finding_count"], 1)
+        self.assertEqual(vulnerable["latency_seconds"], 0.125)
+        self.assertRegex(vulnerable["commit"], r"^[0-9a-f]{40,64}$")
+        self.assertEqual(fixed["status"], "running")
+        self.assertEqual(fixed["finding_count"], 0)
+        self.assertRegex(fixed["commit"], r"^[0-9a-f]{40,64}$")
+        self.assertEqual(json.loads((self.out / "acceptance.json").read_text()), result)
 
 
 if __name__ == "__main__":

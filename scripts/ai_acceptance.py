@@ -34,6 +34,10 @@ SCENARIOS = {
     "shell": "Untrusted input must not be interpreted by a command shell.",
 }
 FIXTURE_ROOT = ROOT / "examples/ai-acceptance"
+EMPTY_SCA_REASON = (
+    "Bundled synthetic acceptance fixtures use only the Python standard library "
+    "and declare no third-party dependencies."
+)
 ReviewRunner = Callable[[list[str], Path, dict[str, str], float], ProcessResult]
 
 
@@ -124,6 +128,7 @@ def _review_fixture(
     model: str,
     runner: ReviewRunner,
     timeout: int,
+    started_at: str,
 ) -> tuple[dict, list[str]]:
     command = [
         sys.executable,
@@ -141,17 +146,18 @@ def _review_fixture(
         "--auth",
         "account",
         "--allow-code-upload",
+        "--allow-empty-sca",
+        EMPTY_SCA_REASON,
         "--model",
         model,
     ]
-    started = now()
     result = runner(command, ROOT, dict(os.environ), timeout)
     record = {
         "scenario": scenario,
         "variant": variant,
         "commit": commit,
         "output": str(output),
-        "started_at": started,
+        "started_at": started_at,
         "finished_at": now(),
         "latency_seconds": result.seconds,
         "exit_code": result.code,
@@ -211,6 +217,7 @@ def run_acceptance(
         "live_model_request": False,
         "model": model,
         "claude_version": None,
+        "runs": [],
         "comparisons": [],
         "limitations": [
             "Synthetic fixtures cover three isolated vulnerability classes, not general security quality.",
@@ -255,6 +262,23 @@ def run_acceptance(
                     raise ReviewError(f"Missing synthetic fixture: {fixture}")
                 commit = _create_repository(repo, fixture, git_env)
                 output = reviews / f"{scenario}-{variant}"
+                started_at = now()
+                run_index = len(value["runs"])
+                value["runs"].append(
+                    {
+                        "scenario": scenario,
+                        "variant": variant,
+                        "commit": commit,
+                        "output": str(output),
+                        "started_at": started_at,
+                        "finished_at": None,
+                        "latency_seconds": 0,
+                        "exit_code": None,
+                        "status": "running",
+                        "finding_count": 0,
+                    }
+                )
+                write_json(out / "acceptance.json", value)
                 try:
                     record, recorded_limits = _review_fixture(
                         scenario=scenario,
@@ -266,6 +290,7 @@ def run_acceptance(
                         model=model,
                         runner=runner,
                         timeout=timeout,
+                        started_at=started_at,
                     )
                     if "claude_version" in record:
                         versions.add(record["claude_version"])
@@ -276,12 +301,16 @@ def run_acceptance(
                         "variant": variant,
                         "commit": commit,
                         "output": str(output),
+                        "started_at": started_at,
+                        "finished_at": now(),
                         "status": "incomplete",
                         "error": str(error),
                         "latency_seconds": 0,
+                        "exit_code": 2,
                         "finding_count": 0,
                     }
                 runs[variant] = record
+                value["runs"][run_index] = record
                 write_json(out / "acceptance.json", value)
             vulnerable = runs["vulnerable"]
             fixed = runs["fixed"]

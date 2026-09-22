@@ -199,11 +199,10 @@ def execute(argv: list[str], cwd: Path, env: dict[str,str], timeout: float, stdi
             try: p.communicate(None if stdin is None else stdin.encode(),timeout=timeout)
             except subprocess.TimeoutExpired:
                 timed=True
-                if os.name=='posix':
-                    try: os.killpg(p.pid,signal.SIGKILL)
-                    except ProcessLookupError: pass
-                else: p.kill()
-                p.communicate()
+                _terminate_process(p)
+            except KeyboardInterrupt:
+                _terminate_process(p)
+                raise
             out.seek(0); err.seek(0)
             stdout=out.read(MAX_OUTPUT+1); stderr=err.read(MAX_OUTPUT+1)
             truncated=len(stdout)>MAX_OUTPUT or len(stderr)>MAX_OUTPUT
@@ -211,3 +210,14 @@ def execute(argv: list[str], cwd: Path, env: dict[str,str], timeout: float, stdi
                                  stdout[:MAX_OUTPUT].decode('utf-8','replace'),
                                  stderr[:MAX_OUTPUT].decode('utf-8','replace'),round(time.monotonic()-start,3),timed,truncated)
     except OSError as e: raise ReviewError(f'Cannot start {Path(argv[0]).name}: {e}') from e
+
+
+def _terminate_process(process: subprocess.Popen) -> None:
+    if os.name == 'posix':
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+    else:
+        process.kill()
+    process.communicate()

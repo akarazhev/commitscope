@@ -170,7 +170,7 @@ def _private_scanners(out: Path, report: dict) -> None:
 
 
 def run_review(request: ReviewRequest, *, model: str, timeout: int, max_turns: int,
-               scanner_timeout: int = 360) -> dict:
+               scanner_timeout: int = 360, allow_empty_sca: str = '') -> dict:
     validate_exact_model(model)
     validate_ai_options('subscription', None, max_turns, timeout)
     if type(scanner_timeout) is not int or not 30 <= scanner_timeout <= 3600:
@@ -183,7 +183,8 @@ def run_review(request: ReviewRequest, *, model: str, timeout: int, max_turns: i
     if normalize_evidence(request.policy) != request.policy:
         raise ReviewError('Policy contains credential material; remove it before review')
     report = run_scan(request.repo, request.out, ref=request.commit_sha,
-                      fail_on=request.policy['fail_threshold'], timeout=scanner_timeout, defer_reports=True)
+                      fail_on=request.policy['fail_threshold'], timeout=scanner_timeout,
+                      allow_empty_sca=allow_empty_sca, defer_reports=True)
     report.update(review_kind='corporate', review={
         'commit_sha': request.commit_sha, 'policy_path': str(request.policy_path),
         'policy_sha256': request.policy_sha256, 'model': model,
