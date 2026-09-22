@@ -30,7 +30,7 @@ def run_scan(repo: Path, out: Path, *, ref: str='HEAD', base: str | None=None,
     work=private_dir(out/'.work')
     try:
         report['snapshot']=export_snapshot(repo,work/'source',ref=ref,base=base)
-        versions=inspect_tools(tools_root); report['tool_checks']=versions
+        versions=inspect_tools(tools_root,resources=resources); report['tool_checks']=versions
         if not all(x['ok'] for x in versions.values()):
             raise ReviewError('Required scanner installation/version checks failed. Run bootstrap and doctor. Details are in tool_checks.')
         report['scanners'],report['findings']=run_scanners(work/'source',out,tool_paths(tools_root),tools_root=tools_root,

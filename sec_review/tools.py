@@ -157,9 +157,9 @@ def inspect_semgrep(root: Path, path: Path, expected: str, home: Path) -> dict:
           and wrapper_recorded)
     return {'ok':good,'expected':expected,'reported':reported[:1000],'sha256':file_hash(path)}
 
-def inspect_tools(root: Path | None = None) -> dict:
+def inspect_tools(root: Path | None = None, resources: Path | None = None) -> dict:
     root = root or current_tools_root()
-    spec=lock(); paths=tool_paths(root); result={}
+    spec=lock(resources); paths=tool_paths(root); result={}
     with tempfile.TemporaryDirectory(prefix='sr-doctor-') as d:
         home=Path(d); env=child_env(home)
         for name,path in paths.items():
@@ -241,7 +241,7 @@ def bootstrap(root: Path | None = None) -> dict:
                                 '--no-input','--prefer-binary','--index-url','https://pypi.org/simple',str(archive)],resources,env,900)
                 write_text(root/'semgrep-install.log',result.stdout+'\n'+result.stderr)
                 if result.code!=0 or result.truncated: raise ReviewError('Semgrep dependency installation failed; see .tools/semgrep-install.log')
-        checks=inspect_tools(root)
+        checks=inspect_tools(root,resources=resources)
         if not all(v['ok'] for v in checks.values()): raise ReviewError('Installed binary version check failed: '+str(checks))
         freeze=execute([str(root/'semgrep-env/bin/python'),'-I','-m','pip','freeze','--all'],resources,env,60)
         receipt={'installed_at':now(),'host_prerequisites':prerequisites,'platform':key,'python':sys.version,'lock_sha256':file_hash(resources/'config/tools.lock.json'),

@@ -70,14 +70,14 @@ class PipelineProtocolTests(unittest.TestCase):
         record=self.tools/'semgrep-env/lib/python3.14/site-packages/semgrep-1.177.0.dist-info/RECORD'
         record.parent.mkdir(parents=True)
         record.write_text(f'../../../bin/semgrep,sha256={digest},{wrapper.stat().st_size}\n')
-    def resources(self):
-        resources=self.root/'resources'
+    def resources(self, name='resources', *, semgrep='1.177.0', gitleaks='8.30.1', trivy='0.74.0'):
+        resources=self.root/name
         config=resources/'config'
         config.mkdir(parents=True,exist_ok=True)
         (config/'tools.lock.json').write_text(json.dumps({'schema_version':'selected','tools':{
-            'semgrep':{'version':'1.177.0'},
-            'gitleaks':{'version':'8.30.1'},
-            'trivy':{'version':'0.74.0'}}}))
+            'semgrep':{'version':semgrep},
+            'gitleaks':{'version':gitleaks},
+            'trivy':{'version':trivy}}}))
         (config/'semgrep.yaml').write_text('rules: []\n')
         (config/'gitleaks.toml').write_text('[allowlist]\ndescription = "test resource root"\n')
         (config/'trivy.yaml').write_text('quiet: true\n')
@@ -94,8 +94,11 @@ class PipelineProtocolTests(unittest.TestCase):
     def test_policy_hashes_come_from_explicit_resources(self):
         from sec_review.project import run_scan
         resources=self.resources()
+        mismatched=self.resources('mismatched-resources',semgrep='0.0.0',gitleaks='0.0.0',trivy='0.0.0')
         marker=resources/'config/selected-policy.txt'
-        r=run_scan(self.repo,self.root/'out',tools_root=self.tools,resources=resources)
+        with patch('sec_review.tools.current_resource_root',return_value=mismatched):
+            r=run_scan(self.repo,self.root/'out',tools_root=self.tools,resources=resources)
+        self.assertEqual(r['decision']['exit_code'],0,r)
         self.assertEqual(r['policy']['tools']['schema_version'],'selected')
         self.assertEqual(r['policy']['config_hashes']['selected-policy.txt'],
                          hashlib.sha256(marker.read_bytes()).hexdigest())
@@ -118,21 +121,35 @@ class PipelineProtocolTests(unittest.TestCase):
                 code=cli.main(['scan','--repo',str(self.repo)])
         self.assertEqual(code,0)
         self.assertEqual(captured['out'],(cwd/'.runs'/'scan-0123456789ab').absolute())
-    def test_cli_demo_canonicalizes_trusted_temp_alias_output(self):
+    def test_cli_demo_rejects_user_created_symlink_output_parent(self):
         from sec_review import cli
         with tempfile.TemporaryDirectory() as directory:
             root=Path(directory).resolve()
             target=root/'target'; target.mkdir()
             alias=root/'alias'; alias.symlink_to(target,target_is_directory=True)
-            captured={}
+            calls=[]
             def fake_demo(out,**kwargs):
-                captured['out']=out
-                captured['kwargs']=kwargs
+                calls.append((out,kwargs))
                 return 0,{'status':'APPLICATION_TESTS_PASSED_SCANNERS_NOT_RUN'}
             with patch('sec_review.cli.demo',side_effect=fake_demo):
                 code=cli.main(['demo','--app-only','--out',str(alias/'demo-out')])
+        self.assertEqual(code,2)
+        self.assertEqual(calls,[])
+    def test_cli_demo_accepts_known_tmp_alias_output_parent(self):
+        from sec_review import cli
+        try:
+            expected=Path('/tmp').resolve(strict=True)/'commitscope-plan-app-only'
+        except OSError:
+            self.skipTest('/tmp is not available on this host')
+        captured={}
+        def fake_demo(out,**kwargs):
+            captured['out']=out
+            captured['kwargs']=kwargs
+            return 0,{'status':'APPLICATION_TESTS_PASSED_SCANNERS_NOT_RUN'}
+        with patch('sec_review.cli.demo',side_effect=fake_demo):
+            code=cli.main(['demo','--app-only','--out','/tmp/commitscope-plan-app-only'])
         self.assertEqual(code,0)
-        self.assertEqual(captured['out'],(target/'demo-out').resolve(strict=False))
+        self.assertEqual(captured['out'],expected)
         self.assertTrue(captured['kwargs']['app_only'])
     def test_findings_are_collected_from_all_four_protocols(self):
         from sec_review.project import run_scan

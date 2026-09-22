@@ -51,32 +51,43 @@ def ai_options(p, *, require_auth=False):
     p.add_argument('--max-turns',type=int,default=3,help='Turn limit per Claude call (1-20; default 3)')
     p.add_argument('--ai-timeout',type=int,default=240,help='Wall-clock seconds per Claude call (1-3600; default 240)')
 
+def _add_trusted_temp_alias(roots: list[tuple[Path, Path]], value: str | Path) -> None:
+    alias=Path(value).absolute()
+    try:
+        resolved=alias.resolve(strict=True)
+    except OSError:
+        return
+    if all(existing != alias for existing, _ in roots):
+        roots.append((alias,resolved))
+
+def _trusted_temp_alias_roots() -> list[tuple[Path, Path]]:
+    roots: list[tuple[Path, Path]] = []
+    for value in ('/tmp','/var/tmp'):
+        _add_trusted_temp_alias(roots,value)
+    temp_root=Path(tempfile.gettempdir()).absolute()
+    try:
+        no_symlinks(temp_root)
+    except ReviewError:
+        return roots
+    _add_trusted_temp_alias(roots,temp_root)
+    return roots
+
 def trusted_output_path(path: Path) -> Path:
     path=path.absolute()
     try:
         no_symlinks(path)
         return path
-    except ReviewError:
-        pass
-    try:
-        resolved=path.resolve(strict=False)
-    except OSError:
-        return path
-    roots=[]
-    for value in (tempfile.gettempdir(), '/tmp', '/var/tmp'):
+    except ReviewError as error:
+        original=error
+    for alias,resolved_root in _trusted_temp_alias_roots():
         try:
-            root=Path(value).resolve(strict=True)
-        except OSError:
-            continue
-        if root not in roots:
-            roots.append(root)
-    for root in roots:
-        try:
-            resolved.relative_to(root)
-            return resolved
+            relative=path.relative_to(alias)
         except ValueError:
             continue
-    return path
+        candidate=resolved_root/relative
+        no_symlinks(candidate)
+        return candidate
+    raise original
 
 def main(argv=None) -> int:
     args=parser().parse_args(argv)
