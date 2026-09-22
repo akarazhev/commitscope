@@ -5,6 +5,7 @@ import sys
 import unittest
 from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
 class AcceptanceTests(unittest.TestCase):
     def test_runnable_entrypoint_and_documented_commands(self):
         entry = ROOT / 'review.py'
@@ -16,6 +17,16 @@ class AcceptanceTests(unittest.TestCase):
         self.assertIn('CommitScope', p.stdout)
         self.assertIn('Evidence-driven security review for Git repositories', p.stdout)
         self.assertNotIn('Security Review Project:', p.stdout)
+    def test_installable_cli_and_consumer_action_are_documented(self):
+        readme = (ROOT / 'README.md').read_text()
+        workflow = (ROOT / 'docs/examples/commitscope.yml').read_text()
+        self.assertIn('pipx install "git+https://github.com/akarazhev/commitscope.git@v2.3.0"', readme)
+        self.assertIn('uses: akarazhev/commitscope@v2.3.0', workflow)
+        self.assertIn('persist-credentials: false', workflow)
+        self.assertIn('if: always()', workflow)
+        self.assertIn('ea165f8d65b6e75b540449e92b4886f43607fa02', workflow)
+        self.assertIn('3ea06614dafe36dec890db3446326e0d40ce53d4', workflow)
+        self.assertNotIn('--allow-code-upload', workflow)
     def test_report_driver_uses_public_brand(self):
         from sec_review.reports import sarif
         r={'findings':[]}

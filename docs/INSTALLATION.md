@@ -4,6 +4,30 @@ For a new host, begin with [START-HERE](../START-HERE.md). No earlier release or
 migration is required. The public project name is CommitScope; the internal Python
 package remains `sec_review` for compatibility.
 
+## GitHub-hosted pipx installation
+
+Use this path when installing from the GitHub tag. It does not imply a PyPI package
+or live tag acceptance.
+
+```bash
+pipx install "git+https://github.com/akarazhev/commitscope.git@v2.3.0"
+commitscope preflight
+commitscope bootstrap
+commitscope doctor
+```
+
+Upgrade to the same immutable release tag:
+
+```bash
+pipx upgrade commitscope
+```
+
+Source checkout remains supported:
+
+```bash
+python3 -I review.py doctor
+```
+
 ## Host prerequisites
 
 Use Python **3.11–3.14** with `venv` and pip, Git, and certificate roots. Linux must use
@@ -33,6 +57,22 @@ The shell wrapper uses `python3` from PATH by default; set `PYTHON=/absolute/pat
 project and installation. Run scanners as an unprivileged user in a separate review
 project directory, not in your application's virtual environment.
 
+## Scanner state and evidence paths
+
+Scanner binaries, Semgrep's venv, downloads, receipts, and Trivy database cache are
+mutable operator state:
+
+- Source checkout: `.tools/` under the checkout.
+- Installed CLI with `COMMITSCOPE_HOME=/absolute/path`: `$COMMITSCOPE_HOME/tools`.
+- Installed CLI on macOS without `COMMITSCOPE_HOME`: `~/Library/Caches/CommitScope/tools`.
+- Installed CLI on Linux with `XDG_CACHE_HOME`: `$XDG_CACHE_HOME/commitscope/tools`.
+- Installed CLI on Linux without either variable: `~/.cache/commitscope/tools`.
+
+`COMMITSCOPE_HOME` must be absolute and must not be empty. Default run output, when
+`--out` is omitted, is `.runs/` under the current directory for both installed and
+source-checkout commands. Keep scanner cache and run evidence out of the target
+repository.
+
 ## Installer actions
 
 `sh scripts/bootstrap.sh` calls the Python installer. It downloads the selected
@@ -45,7 +85,7 @@ Nothing is installed into the target application. Its requirements, setup script
 package-manager hooks, and Dockerfile are not executed. No API token is required for
 the bundled scanner checks.
 
-Expected local layout after a successful installation:
+Expected source-checkout layout after a successful installation:
 
 ```text
 .tools/
@@ -108,8 +148,9 @@ the **real** demo and representative project scans. Preserve the old version and
 acceptance results for rollback. Do not pin a new version only to make a test green.
 
 Uninstall by removing this review-project directory, including its local `.tools/`
-cache, after retaining necessary evidence. The installer does not alter the target
-repository or create a system service.
+cache, or by removing the installed CLI cache path listed above after retaining
+necessary evidence. The installer does not alter the target repository or create a
+system service.
 
 
 ## Optional Claude Code authentication

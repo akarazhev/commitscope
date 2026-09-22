@@ -11,6 +11,36 @@ results exist and after explicit source-upload consent.
 certified production security gate, merge approval service, penetration test, or
 official Anthropic product. Native Windows is outside scope; use Linux/WSL2 instead.
 
+## Consumer Install Paths
+
+GitHub-hosted pipx installation for consumers pinning the `v2.3.0` source ref:
+
+```bash
+pipx install "git+https://github.com/akarazhev/commitscope.git@v2.3.0"
+commitscope preflight
+commitscope bootstrap
+commitscope doctor
+```
+
+Upgrade to the same immutable release tag:
+
+```bash
+pipx upgrade commitscope
+```
+
+Source checkout remains supported:
+
+```bash
+python3 -I review.py doctor
+```
+
+Source checkouts store scanners in `.tools/`. Installed CLI runs store scanners in
+`$COMMITSCOPE_HOME/tools` when `COMMITSCOPE_HOME` is set to an absolute path; otherwise
+macOS uses `~/Library/Caches/CommitScope/tools`, Linux uses
+`$XDG_CACHE_HOME/commitscope/tools` when set, and Linux falls back to
+`~/.cache/commitscope/tools`. Default scan/demo outputs go under `.runs/` relative to
+the operator's current directory.
+
 ## Supported Host Scope
 
 - macOS and Linux on x86_64 or ARM64.
@@ -36,6 +66,25 @@ python3 -I scripts/acceptance.py --out .runs/acceptance-scanners
 Expected scanner-only acceptance output is `SCANNERS_VERIFIED_AI_NOT_RUN` with exit
 code 0. The demo command prints `DEMO_PASSED` when the real scanners detect the
 vulnerable fixture and the fixed fixture passes the configured threshold.
+
+## GitHub Action Consumer Workflow
+
+Use `docs/examples/commitscope.yml` as the starting consumer workflow. The scanner
+step is:
+
+```yaml
+uses: akarazhev/commitscope@v2.3.0
+```
+
+The example pins third-party actions to full commit SHAs and uses the `v2.3.0` tag
+for CommitScope. Tag pinning is readable but depends on tag governance; consumers
+that require immutable action source should replace the tag with a reviewed full
+commit SHA. Do not use a moving branch such as `main` for a required control.
+
+The action is scanner-only: it has no AI mode, no source upload path, and it does
+not build the target or install target dependencies. SARIF upload requires
+`security-events: write`; GitHub may restrict that permission for pull requests from
+forks, so keep the always-run artifact upload as the portable evidence path.
 
 ## Scan A Repository
 
@@ -112,6 +161,7 @@ between them, and scanner-only readiness does not require AI acceptance.
 | Trivy checks | Dependency-vulnerability and IaC misconfiguration scans with inventory/freshness policy. |
 | `review.py demo` | Vulnerable/fixed fixture acceptance using real installed scanners. |
 | `scripts/acceptance.py` | End-to-end scanner acceptance, with optional live AI modes only when explicitly selected. |
+| `action.yml` | Composite scanner-only GitHub Action interface for consumer workflows. |
 | `.github/workflows/verify.yml` | Unit/protocol matrix on Ubuntu and macOS for Python 3.11-3.14 plus real scanner acceptance on Ubuntu and macOS. |
 | `.github/workflows/scan.yml` | Manual trusted-repository scan workflow for a selected full commit SHA. |
 

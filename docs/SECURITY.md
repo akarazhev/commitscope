@@ -33,6 +33,30 @@ SCA freshness are not clean checks. Normalized Gitleaks output omits matched sec
 AI receives a bounded packet, has no model-callable execution tools, and cannot lower the
 scanner policy result. Its input is screened but must still be approved for transfer.
 
+## Installed state and GitHub Action boundaries
+
+Source checkouts store scanner state in `.tools/`. Installed CLI runs store scanner
+state under `$COMMITSCOPE_HOME/tools` when `COMMITSCOPE_HOME` is an absolute path;
+otherwise macOS uses `~/Library/Caches/CommitScope/tools`, Linux uses
+`$XDG_CACHE_HOME/commitscope/tools` when set, and Linux falls back to
+`~/.cache/commitscope/tools`. Default `.runs/` output is relative to the current
+directory, not to the installed package.
+
+The consumer GitHub Action form uses:
+
+```yaml
+uses: akarazhev/commitscope@v2.3.0
+```
+
+Tag pinning is convenient for operators but weaker than pinning a reviewed full
+commit SHA. The example workflow pins third-party actions by full SHA and can be
+adapted to pin CommitScope by full SHA as well.
+
+The Action is scanner-only. It has no AI mode, no `--allow-code-upload` path, no
+source upload to an AI service, and no target build or target dependency install.
+SARIF upload requires `security-events: write`; fork pull requests may not receive
+that permission from GitHub, so preserve report artifacts for evidence.
+
 ## Authentication isolation
 
 The operator must explicitly choose `--auth subscription` or `--auth api`. API mode

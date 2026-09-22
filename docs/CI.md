@@ -4,6 +4,32 @@ The workflow files in `.github/workflows/` are active YAML, not disabled placeho
 They are installed only when **you** put this project's contents in a GitHub repository.
 No GitHub repository, secrets, branch rules, or workflow runs were created for you.
 
+## Consumer GitHub Action workflow
+
+For a repository that should produce scanner evidence on pull requests, pushes to
+`main`, and manual dispatch, start from `docs/examples/commitscope.yml`:
+
+```yaml
+uses: akarazhev/commitscope@v2.3.0
+```
+
+The example pins `actions/checkout`, `actions/upload-artifact`, and
+`github/codeql-action/upload-sarif` to full commit SHAs. It uses the readable
+`v2.3.0` tag for CommitScope; consumers that require immutable action source should
+replace that tag with a reviewed full commit SHA. Do not pin a required control to a
+moving branch such as `main`.
+
+The consumer action is scanner-only. It installs/runs CommitScope's pinned scanners
+in runner-owned state, has no AI mode, has no source-upload path, and does not build
+the target or install target dependencies. It writes report paths as action outputs;
+the example preserves the report directory with `if: always()` and uploads SARIF with
+`if: always()`.
+
+`security-events: write` is required for GitHub Code Scanning uploads. GitHub can
+withhold that permission for pull requests from forks, so treat SARIF upload from
+forks as best-effort and keep the artifact upload as the portable evidence record.
+This workflow is scanner-ready guidance, not a certified production gate.
+
 ## Deploy a dedicated trusted review repository
 
 Put this project at the root of a separate private repository. Protect its default
