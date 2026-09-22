@@ -2,9 +2,10 @@
 
 **CommitScope 2.3.0 local release-preparation evidence — 2026-09-22.**
 
-These results are from local commands run for Task 7 only. No GitHub-hosted CI,
-pull request, merge, public tag, GitHub Release, public release asset verification,
-or public-tag `pipx install` was performed here. Live AI acceptance was not run.
+These results are from local release-preparation commands before opening the
+GitHub pull request. No GitHub-hosted CI, pull request, merge, public tag,
+GitHub Release, public release asset verification, or public-tag `pipx install`
+was performed here. Live AI acceptance was not run.
 
 CommitScope 2.3.0 is scanner-ready for the measured local macOS ARM64 environment
 below. This is not production certification, native Windows remains outside scope,
@@ -25,7 +26,7 @@ and behavior remain time-dependent.
 
 | Command | Observed result |
 |---|---|
-| `python3 -I tests/run_tests.py` | Passed: 178 tests ran, `OK`. |
+| `python3 -I tests/run_tests.py` | Passed: 190 tests ran, `OK`. |
 | `python3 -I review.py preflight` | Passed with `HOST_PREREQUISITES_PASSED`; Python 3.14.6, `darwin-arm64`, Git 2.50.1, venv with pip available. |
 | `python3 -I review.py doctor` before scanner bootstrap | Failed with exit 2 because Semgrep, Gitleaks, and Trivy were `not installed`. |
 | `python3 -I review.py bootstrap` without network escalation | Failed with exit 2 while downloading `gitleaks_8.30.1_darwin_arm64.tar.gz`: DNS error `nodename nor servname provided, or not known`. |
@@ -40,13 +41,27 @@ Source demo evidence path: `.runs/v2.3-source-demo`.
 
 | Command | Observed result |
 |---|---|
-| `python3 -I scripts/build_dist.py --dist-dir /tmp/commitscope-build2-4oxGeL/dist` | Passed without PyPI or external build tooling; built `commitscope-2.3.0.tar.gz` and `commitscope-2.3.0-py3-none-any.whl`. |
-| `python3 -I -m zipfile -l /tmp/commitscope-build2-4oxGeL/dist/commitscope-2.3.0-py3-none-any.whl` | Passed; wheel includes `sec_review`, console metadata, and `share/commitscope/{config,prompts,examples,tests}` runtime resources. |
-| `/tmp/commitscope-build2-4oxGeL/sdist-env/bin/python -m pip install --no-index --no-deps /tmp/commitscope-build2-4oxGeL/dist/commitscope-2.3.0.tar.gz` | Passed; pip built the wheel from the sdist through the in-tree backend without downloading build dependencies. |
+| `python3 -I scripts/build_dist.py --dist-dir .../dist` | Passed without PyPI or external build tooling; built `commitscope-2.3.0.tar.gz` and `commitscope-2.3.0-py3-none-any.whl`. |
+| `python3 -I -m zipfile -l .../dist/commitscope-2.3.0-py3-none-any.whl` | Passed; wheel includes `sec_review`, console metadata, and `share/commitscope/{config,prompts,examples,tests}` runtime resources. |
+| Clean sdist install with `pip install --no-index --no-deps .../commitscope-2.3.0.tar.gz` | Passed; pip built the wheel from the sdist through the in-tree backend without downloading build dependencies. |
+| Local git URL install with `PIP_NO_INDEX=1 pip install --no-deps git+file://...@HEAD` | Passed; exact-commit install exercised the same no-build-dependency path expected for `pipx install git+https://...@v2.3.0`. |
 | `python3 -m venv /tmp/commitscope-230-env` | Passed; created the clean install environment. |
-| `/tmp/commitscope-230-env/bin/python -m pip install --no-index --no-deps /tmp/commitscope-build2-4oxGeL/dist/commitscope-2.3.0-py3-none-any.whl` | Passed; installed `commitscope-2.3.0` from the local wheel. |
+| `/tmp/commitscope-230-env/bin/python -m pip install --no-index --no-deps .../dist/commitscope-2.3.0-py3-none-any.whl` | Passed; installed `commitscope-2.3.0` from the local wheel. |
 | From `/tmp`: `/tmp/commitscope-230-env/bin/commitscope preflight` | Passed with `HOST_PREREQUISITES_PASSED`; Python 3.14.6, `darwin-arm64`, Git 2.50.1, venv with pip available. |
 | From `/tmp`: `/tmp/commitscope-230-env/bin/commitscope demo --app-only --out /tmp/commitscope-230-demo` | Passed: 8 application tests ran, `APPLICATION_TESTS_PASSED_SCANNERS_NOT_RUN`; scanner integration and AI integration were `not_run`. |
+
+Additional post-review package hardening checks passed: prepared wheel metadata
+matches wheel `.dist-info` except `RECORD`; symlinked package payload files are
+rejected; symlinked metadata inputs (`README.md`, `pyproject.toml`, and
+`sec_review/__init__.py`) are rejected; no-git sdist fallback walks the source
+tree instead of silently creating an incomplete archive; CI archive inspection
+rejects `.git`, `.idea`, `.runs`, `.tools`, `.worktrees`, unsafe paths, raw
+reports, and generated report artifacts.
+
+Composite Action incomplete-path evidence was also extended: a bootstrap failure
+now preserves normalized `report.json`, `report.md`, and `report.sarif`, writes
+GitHub outputs for those paths, and returns exit code `2` without running a scan,
+target build, target dependency install, source upload, or AI request.
 
 Installed app-only demo evidence path: `/private/tmp/commitscope-230-demo`.
 

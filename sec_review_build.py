@@ -221,10 +221,8 @@ def _wheel_payload_files() -> list[tuple[Path, str]]:
 def _source_files() -> list[Path]:
     tracked = _git_ls_files()
     explicit = ["sec_review_build.py", "scripts/build_dist.py"]
-    files = {ROOT / item for item in tracked}
+    files = {ROOT / item for item in tracked} if tracked else set(_walk_files(ROOT))
     files.update(ROOT / item for item in explicit if (ROOT / item).is_file())
-    if not files:
-        files = set(_walk_files(ROOT))
     return sorted(path for path in files if _include_source(path))
 
 

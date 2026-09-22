@@ -4,9 +4,12 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 import re
+import uuid
 
+from . import __version__
 from .cli import main
-from .core import ReviewError, no_symlinks
+from .core import ReviewError, no_symlinks, now, private_dir
+from .reports import save_reports
 
 
 _FAIL_ON = ('low', 'medium', 'high', 'critical')
@@ -152,12 +155,47 @@ def write_action_outputs(path: Path, inputs: ActionInputs, code: int) -> None:
             output.write(f'{key}={value}\n')
 
 
+def save_bootstrap_failure_report(inputs: ActionInputs) -> None:
+    reason = 'GitHub Action scanner bootstrap failed before scan; no target source snapshot was exported.'
+    private_dir(inputs.out, new=True)
+    report = {
+        'schema_version': '2.0',
+        'project_version': __version__,
+        'run_id': str(uuid.uuid4()),
+        'started_at': now(),
+        'finished_at': now(),
+        'fail_on': inputs.fail_on,
+        'snapshot': {
+            'repo': str(inputs.repo),
+            'head': inputs.ref,
+            'scope': 'not exported',
+            'excluded': [],
+            'inline_iac_suppressions': [],
+        },
+        'scanners': [
+            {'name': name, 'status': 'not_run', 'reason': reason}
+            for name in ('semgrep', 'gitleaks', 'trivy-vuln', 'trivy-iac')
+        ],
+        'findings': [],
+        'ai': {'requested': False, 'status': 'not_requested'},
+        'policy': {'tools': {}, 'config_hashes': {}},
+        'scope_note': 'Action bootstrap failed before scanner execution; no target build, dependency install, source upload, or AI request was performed.',
+        'error': reason,
+    }
+    save_reports(inputs.out, report)
+
+
 def run_action(environ: Mapping[str, str], cli_main: Callable[[list[str]], int] = main) -> int:
     try:
         inputs = parse_action_inputs(environ)
     except (ReviewError, OSError, ValueError, KeyError, TypeError):
         return 2
     if cli_main(['bootstrap']) != 0:
+        try:
+            save_bootstrap_failure_report(inputs)
+            write_action_outputs(inputs.github_output, inputs, 2)
+        except (ReviewError, OSError, ValueError, KeyError, TypeError):
+            pass
         return 2
     code = cli_main(scan_argv(inputs))
     if code not in (0, 1, 2):

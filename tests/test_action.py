@@ -1,4 +1,5 @@
 from pathlib import Path
+import json
 import sys
 import tempfile
 import unittest
@@ -106,7 +107,7 @@ class ActionTests(unittest.TestCase):
             self.assertEqual(run_action(env, calls.append), 2)
             self.assertEqual(calls, [])
 
-    def test_bootstrap_failure_returns_two_without_scan(self):
+    def test_bootstrap_failure_preserves_reports_and_outputs_without_scan(self):
         with tempfile.TemporaryDirectory() as directory:
             env = self.environment(Path(directory).resolve())
             calls = []
@@ -115,6 +116,22 @@ class ActionTests(unittest.TestCase):
                 return 1
             self.assertEqual(run_action(env, fake_main), 2)
             self.assertEqual(calls, [['bootstrap']])
+            values = parse_action_inputs(env)
+            output = Path(env['GITHUB_OUTPUT']).read_text()
+            self.assertIn('report-directory=', output)
+            self.assertIn('report-json=', output)
+            self.assertIn('report-markdown=', output)
+            self.assertIn('report-sarif=', output)
+            self.assertIn('exit-code=2\n', output)
+            self.assertTrue((values.out / 'report.json').is_file())
+            self.assertTrue((values.out / 'report.md').is_file())
+            self.assertTrue((values.out / 'report.sarif').is_file())
+            report = json.loads((values.out / 'report.json').read_text())
+            self.assertEqual(report['decision']['exit_code'], 2)
+            self.assertEqual(report['ai']['status'], 'not_requested')
+            self.assertEqual({scanner['name'] for scanner in report['scanners']},
+                             {'semgrep', 'gitleaks', 'trivy-vuln', 'trivy-iac'})
+            self.assertTrue(all(scanner['status'] == 'not_run' for scanner in report['scanners']))
 
     def test_incomplete_scan_status_writes_outputs_and_returns_two(self):
         with tempfile.TemporaryDirectory() as directory:

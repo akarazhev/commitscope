@@ -268,6 +268,42 @@ class DistributionTests(unittest.TestCase):
             self.assertEqual(cli.stdout.strip(), "2.3.0")
             self.assertEqual(module.stdout.strip(), "2.3.0")
 
+    def test_sdist_no_git_fallback_walks_sources_and_rejects_payload_symlinks(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            clean = root / "clean"
+            shutil.copytree(ROOT, clean, symlinks=True, ignore=shutil.ignore_patterns(".git", "__pycache__"))
+
+            script = (
+                "from pathlib import Path; import sys, tarfile; sys.path.insert(0, str(Path.cwd())); "
+                "import sec_review_build; "
+                "path = Path('dist') / sec_review_build.build_sdist('dist'); "
+                "entries = set(tarfile.open(path, 'r:gz').getnames()); "
+                "assert 'commitscope-2.3.0/sec_review/cli.py' in entries"
+            )
+            complete = subprocess.run(
+                [sys.executable, "-I", "-c", script],
+                cwd=clean,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            self.assertEqual(complete.returncode, 0, complete.stderr + complete.stdout)
+
+            secret = root / "outside-secret.txt"
+            secret.write_text("must not be packaged")
+            target = clean / "sec_review" / "symlink_secret.py"
+            target.symlink_to(secret)
+            rejected = subprocess.run(
+                [sys.executable, "-I", "-c", script],
+                cwd=clean,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            self.assertNotEqual(rejected.returncode, 0)
+            self.assertIn("Refusing symbolic-link build input", rejected.stderr + rejected.stdout)
+
     def test_module_entrypoint_returns_cli_status(self):
         with mock.patch("sec_review.cli.main", return_value=7):
             with self.assertRaises(SystemExit) as stopped:
