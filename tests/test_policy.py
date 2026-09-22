@@ -4,6 +4,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -297,6 +298,21 @@ class PolicyTests(unittest.TestCase):
         subprocess.check_call(['git', 'init', '--bare', '-q', str(bare)])
         with self.assertRaises(ReviewError):
             self.request(repo=bare)
+
+    def test_dirty_trailing_space_repo_does_not_switch_to_clean_sibling(self):
+        spaced_repo = self.root / 'repo '
+        shutil.copytree(self.repo, spaced_repo)
+        (spaced_repo / 'app.py').write_text('dirty requested repository')
+        self.assertEqual(self.git('status', '--porcelain=v1'), '')
+        with self.assertRaisesRegex(ReviewError, 'dirty'):
+            self.request(repo=spaced_repo)
+
+    def test_git_toplevel_preserves_trailing_path_whitespace(self):
+        for suffix in (' ', '\t', '\n'):
+            with self.subTest(suffix=repr(suffix)):
+                requested_repo = self.root / ('repo' + suffix)
+                shutil.copytree(self.repo, requested_repo)
+                self.assertEqual(self.request(repo=requested_repo).repo, requested_repo)
 
     def test_symbolic_abbreviated_uppercase_and_invalid_refs_rejected(self):
         for ref in ('HEAD', 'main', 'v1', self.sha[:12], self.sha.upper(), 'a' * 39,

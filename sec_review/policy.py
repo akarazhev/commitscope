@@ -144,7 +144,9 @@ def validate_review_request(repo: Path, ref: str, policy: Path, out: Path) -> Re
         repo = repo.resolve(strict=True)
         if not repo.is_dir() or git(repo, 'rev-parse', '--is-inside-work-tree').strip() != b'true':
             raise ReviewError('Target must be a Git worktree')
-        repo = Path(git(repo, 'rev-parse', '--show-toplevel').decode('utf-8').strip()).resolve(strict=True)
+        # Remove Git's record terminator, preserving whitespace in the directory name.
+        top_level = git(repo, 'rev-parse', '--show-toplevel').decode('utf-8').removesuffix('\n')
+        repo = Path(top_level).resolve(strict=True)
         commit_sha = resolve_exact_commit(repo, ref)
         if git(repo, 'status', '--porcelain=v1', '--untracked-files=all').strip():
             raise ReviewError('Working tree is dirty or has untracked files')
