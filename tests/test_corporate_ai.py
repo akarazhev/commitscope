@@ -547,6 +547,15 @@ class CorporatePrivacyTests(CorporateFixture):
 
 
 class CorporateProtocolTests(CorporateFixture):
+    def test_sensitive_scanner_locations_prevent_packet_upload_and_persistence(self):
+        for value in ('sk-ant-' + 'z' * 30, 'DO_NOT_SAVE_ID'):
+            with self.subTest(value=value):
+                self.report['findings'][0]['path'] = value + '.py'
+                result = self.run_review()
+                self.assertEqual(result['ai']['status'], 'failed')
+                self.assertFalse(any('-p' in call['argv'] for call in self.calls()))
+                self.assertFalse((self.out / 'private/ai-input/packet.json').exists())
+
     def test_two_fresh_processes_preserve_scanners_and_retain_rejected_ai_evidence(self):
         original_scanner = copy.deepcopy(self.report['findings'][0])
         result = self.run_review()

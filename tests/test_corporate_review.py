@@ -33,6 +33,7 @@ class ReviewFixture(unittest.TestCase):
         self.verifier = {'verdicts': []}
         self.claude_failure = False
         self.scanner_failure = None
+        self.scanner_raw_bytes = None
         self.extra_scanner_text = ''
         self.absolute_scanner_paths = False
         self.assert_private_raw = False
@@ -54,6 +55,8 @@ class ReviewFixture(unittest.TestCase):
             self.assertTrue(output.exists())
             self.assertEqual(output.stat().st_mode & 0o777, 0o600)
         if self.scanner_failure == name:
+            if self.scanner_raw_bytes is not None:
+                output.write_bytes(self.scanner_raw_bytes)
             return ProcessResult(9, '', 'Synthetic scanner failure', .01)
         result = self.original_execute(argv, cwd, env, timeout, stdin)
         if self.raw_secret and name == 'gitleaks':
@@ -114,6 +117,34 @@ class ReviewFixture(unittest.TestCase):
 
 
 class CorporateReviewTests(ReviewFixture):
+    def test_sensitive_filenames_fail_before_upload_and_are_absent_from_evidence(self):
+        from sec_review.manifest import verify_review
+        for index, (value, omitted) in enumerate((
+                ('sk-ant-' + 'z' * 30, False), ('sk-ant-' + 'z' * 30, True),
+                ('FIRST_PRIVATE_ACCOUNT_ID', False), ('FIRST_PRIVATE_ACCOUNT_ID', True))):
+            with self.subTest(value=value, omitted=omitted):
+                self.out = self.root / f'privacy-{index}'
+                self.events.clear()
+                self.prepared_values = [('FIRST_PRIVATE_ACCOUNT_ID',)] * 2
+                name = value + ('.skip.py' if omitted else '.py')
+                source = self.repo / name
+                source.write_text('pass\n')
+                self.git('add', '.'); self.git('commit', '-qm', 'synthetic filename')
+                policy = read_json(self.policy_path)
+                policy['scope']['exclude'] = ['*.skip.py']
+                write_json(self.policy_path, policy)
+                report = self.run_review()
+                source.unlink()
+                self.git('add', '.'); self.git('commit', '-qm', 'remove synthetic filename')
+                self.assertEqual(report['decision']['exit_code'], 2)
+                self.assertEqual(self.events, NAMES)
+                self.assertFalse((self.out / 'private/ai-input/packet.json').exists())
+                self.assertNotIn(value, json.dumps(report))
+                for path in self.out.rglob('*'):
+                    if path.is_file():
+                        self.assertNotIn(value, path.read_text(), path)
+                self.assertEqual(verify_review(self.out)[0], 2)
+
     def test_success_call_order_layout_modes_and_manifest_last(self):
         report = self.run_review()
         self.assertEqual(report['decision']['status'], 'READY_FOR_HUMAN_REVIEW', report)
@@ -170,6 +201,28 @@ class CorporateReviewTests(ReviewFixture):
         self.assertEqual(report['decision']['exit_code'], 2)
         self.assertEqual(self.events, NAMES)
         self.assertFalse((self.out / 'private/ai-input/packet.json').exists())
+
+    def test_invalid_utf8_scanner_output_is_withheld_and_sealed_as_incomplete(self):
+        from sec_review.manifest import verify_review
+        for name in NAMES:
+            with self.subTest(scanner=name):
+                self.out = self.root / name
+                self.events.clear()
+                self.scanner_failure = name
+                self.scanner_raw_bytes = b'\xffSYNTHETIC_PRIVATE_UNDECODABLE'
+                report = self.run_review()
+                self.assertEqual(report['decision']['status'], 'INCOMPLETE')
+                self.assertEqual(self.events, NAMES)
+                scan = next(item for item in report['scanners'] if item['name'] == name)
+                self.assertEqual(scan['status'], 'failed')
+                self.assertEqual(scan['exit_code'], 9)
+                self.assertFalse((self.out / 'private/ai-input/packet.json').exists())
+                self.assertIn('withheld', read_json(self.out / f'private/scanners/{name}.json')['error'])
+                for path in self.out.rglob('*'):
+                    if path.is_file():
+                        self.assertNotIn('SYNTHETIC_PRIVATE_UNDECODABLE', path.read_text())
+                self.assertTrue((self.out / 'report.json').is_file())
+                self.assertEqual(verify_review(self.out)[0], 2)
 
     def test_gitleaks_failure_prevents_ai_and_source_packet(self):
         self.scanner_failure = 'gitleaks'

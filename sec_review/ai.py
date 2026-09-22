@@ -330,6 +330,11 @@ def validate_corporate_verifier(obj: dict, ids: list[str]) -> None:
 
 
 def _redact_corporate_packet(packet: dict, sensitive_values: set[str], max_bytes: int) -> dict:
+    for collection in ('files', 'omitted', 'scanner_findings'):
+        for item in packet[collection]:
+            path = item['path']
+            if CORPORATE_SECRET_MATERIAL.search(path) or redact_corporate(path, sensitive_values) != path:
+                raise ReviewError('Corporate packet contains a sensitive source or scanner path; evidence withheld.')
     clean = redact_corporate_value(packet, sensitive_values, redact_keys=False)
     files = []
     for original, item in zip(packet['files'], clean['files']):

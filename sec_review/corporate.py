@@ -18,7 +18,7 @@ from .snapshot import export_snapshot
 
 FINDING_FIELDS = frozenset({'id', 'rule_id', 'path', 'line', 'severity', 'status', 'tool',
                             'package', 'installed_version', 'fixed_version'})
-PROTOCOL_FIELDS = FINDING_FIELDS | frozenset({
+PROTOCOL_FIELDS = (FINDING_FIELDS - {'path'}) | frozenset({
     'schema_version', 'project_version', 'run_id', 'head', 'commit_sha', 'snapshot_sha256',
     'sha256', 'raw_sha256', 'policy_sha256', 'name', 'model', 'model_requested', 'subtype',
     'fail_on', 'started_at', 'finished_at', 'content', 'raw_report', 'raw_privacy',
@@ -109,11 +109,24 @@ def _scanner_semantics(name: str, payload, source: Path) -> tuple[list, dict, ob
 def _redact_scanner_artifacts(out: Path, report: dict, sensitive_values: set[str]) -> None:
     scans = {scan['name']: scan for scan in report['scanners']}
     for path in (out / 'private/scanners').iterdir():
+        try:
+            raw_text = path.read_text(encoding='utf-8')
+        except UnicodeDecodeError:
+            message = 'Scanner evidence withheld because it is not valid UTF-8.'
+            scan = scans[path.stem]
+            if scan['status'] != 'failed':
+                scan.update(status='incomplete', reason=message)
+            report['error'] = message
+            if path.suffix == '.json':
+                write_json(path, {'error': message})
+            else:
+                write_text(path, message + '\n')
+            continue
         if path.suffix == '.json':
             try:
                 payload = read_json(path)
             except ReviewError:
-                write_text(path, normalize_evidence(path.read_text(encoding='utf-8'), sensitive_values))
+                write_text(path, normalize_evidence(raw_text, sensitive_values))
             else:
                 scan = scans[path.stem]
                 try:
@@ -132,7 +145,7 @@ def _redact_scanner_artifacts(out: Path, report: dict, sensitive_values: set[str
                     clean = {'error': 'Scanner evidence withheld due to a privacy collision.'}
                 write_json(path, clean)
         else:
-            write_text(path, normalize_evidence(path.read_text(encoding='utf-8'), sensitive_values))
+            write_text(path, normalize_evidence(raw_text, sensitive_values))
     for scan in report['scanners']:
         scan['raw_privacy'] = 'privacy_redacted'
         if 'raw_sha256' in scan:
@@ -142,7 +155,7 @@ def _redact_scanner_artifacts(out: Path, report: dict, sensitive_values: set[str
 def scanner_sensitive_values(out: Path) -> set[str]:
     try:
         payload = read_json(out / 'private/scanners/gitleaks.json')
-    except (ReviewError, OSError):
+    except (ReviewError, OSError, UnicodeDecodeError):
         return set()
     if not isinstance(payload, list):
         return set()
