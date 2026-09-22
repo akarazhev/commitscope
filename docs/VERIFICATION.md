@@ -1,64 +1,112 @@
 # Verification and Release Status
 
-**CommitScope 2.2.0 scanner-ready build — 2026-09-21.**
+**CommitScope 2.3.0 local release-preparation evidence — 2026-09-22.**
 
-CommitScope is scanner-ready for reproducible local Git repository scans on the
-supported Linux/macOS platform set. It is not certified as a production security
-gate, and native Windows remains outside scope.
+These results are from local commands run for Task 7 only. No GitHub-hosted CI,
+pull request, merge, public tag, GitHub Release, public release asset verification,
+or public-tag `pipx install` was performed here. Live AI acceptance was not run.
 
-## Local Live Acceptance
+CommitScope 2.3.0 is scanner-ready for the measured local macOS ARM64 environment
+below. This is not production certification, native Windows remains outside scope,
+and scanner databases and scanner behavior are time-dependent.
 
-The following checks passed on macOS 15.7.4 ARM64 with Python 3.14.6:
+**Qualification:** scanner-ready is not production certification. Live AI
+acceptance was not run, native Windows remains out of scope, and scanner databases
+and behavior remain time-dependent.
 
-| Check | Result |
+## TDD Version Evidence
+
+| Command | Observed result |
 |---|---|
-| Unit/protocol tests | `python3 -I tests/run_tests.py` — 144/144 passed without setting `TMPDIR` |
-| Host preflight | `python3 -I review.py preflight` — `HOST_PREREQUISITES_PASSED` |
-| Scanner bootstrap | `sh scripts/bootstrap.sh` — installed pinned scanners into `.tools/` |
-| Scanner doctor | `python3 -I review.py doctor` — Semgrep 1.177.0, Gitleaks 8.30.1, Trivy 0.74.0 |
-| Demo | `python3 -I review.py demo --out .runs/20260921-demo-reviewfix` — `DEMO_PASSED` |
-| Scanner-only acceptance | `python3 -I scripts/acceptance.py --out .runs/20260921-acceptance-reviewfix` — `SCANNERS_VERIFIED_AI_NOT_RUN` |
+| `python3 -I -m unittest discover -s tests -p 'test_distribution.py' -v` after adding `test_release_version_is_2_3_0` | Failed as expected: `AssertionError: '2.2.0' != '2.3.0'`; 5 tests ran, 1 failure. |
+| `python3 -I -m unittest discover -s tests -p 'test_distribution.py' -v` after setting `sec_review.__version__ = "2.3.0"` | Passed: 5 tests ran, `OK`. |
 
-The acceptance artifact is `.runs/20260921-acceptance-reviewfix/acceptance.json`. It records
-real scanner execution and no AI execution:
+## Local Source Checkout Verification
 
-- `real_scanners_verified: true`
-- `status: SCANNERS_VERIFIED_AI_NOT_RUN`
-- `ai_modes_not_verified: ["subscription", "api"]`
+| Command | Observed result |
+|---|---|
+| `python3 -I tests/run_tests.py` | Passed: 178 tests ran, `OK`. |
+| `python3 -I review.py preflight` | Passed with `HOST_PREREQUISITES_PASSED`; Python 3.14.6, `darwin-arm64`, Git 2.50.1, venv with pip available. |
+| `python3 -I review.py doctor` before scanner bootstrap | Failed with exit 2 because Semgrep, Gitleaks, and Trivy were `not installed`. |
+| `python3 -I review.py bootstrap` without network escalation | Failed with exit 2 while downloading `gitleaks_8.30.1_darwin_arm64.tar.gz`: DNS error `nodename nor servname provided, or not known`. |
+| `python3 -I review.py bootstrap` with network escalation | Passed; installed pinned Gitleaks 8.30.1, Trivy 0.74.0, and Semgrep 1.177.0 into source checkout scanner state. |
+| `python3 -I review.py doctor` after bootstrap | Passed; Semgrep package/core 1.177.0 with wrapper record verified, Gitleaks 8.30.1, Trivy 0.74.0. |
+| `python3 -I review.py demo --out .runs/v2.3-source-demo` without network escalation | Failed with exit 2. Application tests passed, Semgrep/Gitleaks/Trivy IaC ran, but Trivy vulnerability DB download failed: `lookup mirror.gcr.io: no such host`. Evidence preserved under `.runs/v2.3-source-demo-dns-failure`. |
+| `python3 -I review.py demo --out .runs/v2.3-source-demo` with network escalation | Passed with `DEMO_PASSED`; application tests 8/8, scanner integration passed, AI integration `not_run`. |
 
-The demo and acceptance runs create valid `report.json`, `report.md`, and
-`report.sarif` files under their review output directories.
+Source demo evidence path: `.runs/v2.3-source-demo`.
 
-## Scanner Version Notes
+## Package Build and Installed CLI Verification
 
-`review.py doctor` verifies pinned scanner versions from local project tools only:
+| Command | Observed result |
+|---|---|
+| `/tmp/commitscope-build-env/bin/python -m build` without network escalation | Failed because the isolated build environment could not resolve `pypi.org` to install `setuptools==80.9.0`. |
+| `/tmp/commitscope-build-env/bin/python -m build` with network escalation | Passed; built `dist/commitscope-2.3.0.tar.gz` and `dist/commitscope-2.3.0-py3-none-any.whl`. |
+| `shasum -a 256 dist/commitscope-2.3.0-py3-none-any.whl dist/commitscope-2.3.0.tar.gz` | Wheel: `9cc632182ca4df8affd40314da93e05ae61856a5ff4f349184085e9380cbc560`; sdist: `e671e9662b99add4ae558392058c0c4e4d184d42f07171b6a0fbc0e21c0a7e85`. |
+| `python3 -m venv /tmp/commitscope-230-env` | Passed; created the clean install environment. |
+| `/tmp/commitscope-230-env/bin/python -m pip install --no-index --no-deps dist/commitscope-2.3.0-py3-none-any.whl` | Passed; installed `commitscope-2.3.0` from the local wheel. |
+| From `/tmp`: `/tmp/commitscope-230-env/bin/commitscope preflight` | Passed with `HOST_PREREQUISITES_PASSED`; Python 3.14.6, `darwin-arm64`, Git 2.50.1, venv with pip available. |
+| From `/tmp`: `/tmp/commitscope-230-env/bin/commitscope demo --app-only --out /tmp/commitscope-230-demo` | Passed: 8 application tests ran, `APPLICATION_TESTS_PASSED_SCANNERS_NOT_RUN`; scanner integration and AI integration were `not_run`. |
 
-- Semgrep package/core: 1.177.0. The Semgrep wrapper in this wheel currently
-  prints `1.172.0`; CommitScope records that wrapper value but validates the
-  installed Python package metadata and bundled `semgrep-core` version.
-- Gitleaks: 8.30.1.
-- Trivy: 0.74.0.
+Installed app-only demo evidence path: `/private/tmp/commitscope-230-demo`.
 
-Trivy vulnerability data is downloaded into `.tools/cache/trivy` during live scans
-when the cache needs an update. Acceptance must use real scanner execution; saved
-or mocked scanner reports are not a substitute.
+## Installed Scanner-Only Acceptance
 
-## Test Categories
+The installed CLI was verified with a fresh absolute scanner home:
+`COMMITSCOPE_HOME=/private/tmp/commitscope-230-home`.
 
-Unit/protocol tests exercise parsing, path policy, subprocess behavior, reports,
-auth-mode contracts and explicit scanner protocol doubles. They do not prove real
-scanner behavior by themselves.
+Fixture setup exact command sequence:
 
-Live scanner acceptance installs pinned scanner artifacts, checks hashes and
-versions, runs the real demo, and verifies scanner-only readiness.
+```bash
+mkdir /private/tmp/commitscope-230-fixture
+cp -R /Users/andrey.karazhev/Developer/spg/security-review-project-en/.worktrees/installable-cli-action/examples/fixed/. /private/tmp/commitscope-230-fixture/
+git init
+git config user.name 'CommitScope Task 7'
+git config user.email commitscope-task7@example.invalid
+git add .
+git commit -m 'Add fixed fixture'
+rm -rf /private/tmp/commitscope-230-fixture/__pycache__
+git add -u
+git commit --amend --no-edit
+git status --short
+git rev-parse HEAD
+git ls-files
+```
 
-Optional AI verification is separate. Claude Code may be used only after explicit
-auth-mode selection and consent for code upload/model calls. Missing AI acceptance
-does not block scanner-only readiness, but it must remain visible in reports.
+| Command | Observed result |
+|---|---|
+| `COMMITSCOPE_HOME=/private/tmp/commitscope-230-home /tmp/commitscope-230-env/bin/commitscope bootstrap` with network escalation | Passed; installed pinned Gitleaks 8.30.1, Trivy 0.74.0, and Semgrep 1.177.0 into the fresh installed-mode scanner home. |
+| `COMMITSCOPE_HOME=/private/tmp/commitscope-230-home /tmp/commitscope-230-env/bin/commitscope doctor` | Passed; Semgrep package/core 1.177.0 with wrapper record verified, Gitleaks 8.30.1, Trivy 0.74.0. |
+| Fixture setup in `/private/tmp/commitscope-230-fixture` | Clean committed fixture at `194317daebad3e84264f5ee371bfdb3a2750d26e` with tracked files `Dockerfile`, `app.py`, and `requirements.txt`. |
+| `COMMITSCOPE_HOME=/private/tmp/commitscope-230-home /tmp/commitscope-230-env/bin/commitscope scan --repo /private/tmp/commitscope-230-fixture --ref 194317daebad3e84264f5ee371bfdb3a2750d26e --out /private/tmp/commitscope-230-scan --allow-empty-sca 'Fixed fixture uses only the Python standard library.' --fail-on high` with network escalation | Passed: `PASS: /private/tmp/commitscope-230-scan/report.md`; selected checks completed with no findings at the configured threshold. |
+| Report verifier command below over `/private/tmp/commitscope-230-scan` | Passed; `report.json`, `report.md`, and `report.sarif` exist; `project_version` is `2.3.0`; decision exit code is `0`; `ai.status` is `not_requested`; SARIF version is `2.1.0`; scanner statuses were `semgrep=complete`, `gitleaks=complete`, `trivy-vuln=not_applicable`, `trivy-iac=complete`. |
+
+Installed scanner-only evidence path: `/private/tmp/commitscope-230-scan`.
+
+Report verifier exact command:
+
+```bash
+python3 -I -c 'import json; from pathlib import Path; root=Path("/private/tmp/commitscope-230-scan"); required=["report.json","report.md","report.sarif"]; missing=[name for name in required if not (root/name).is_file()]; report=json.loads((root/"report.json").read_text()); sarif=json.loads((root/"report.sarif").read_text()); statuses={item["name"]: item["status"] for item in report["scanners"]}; assert not missing, missing; assert report["project_version"] == "2.3.0", report["project_version"]; assert report["decision"]["exit_code"] == 0, report["decision"]; assert report["ai"]["status"] == "not_requested", report["ai"]; assert set(required) == {p.name for p in root.glob("report.*")}, sorted(p.name for p in root.glob("report.*")); assert sarif["version"] == "2.1.0", sarif.get("version"); assert all(status in ("complete", "not_applicable") for status in statuses.values()), statuses; print("reports verified", statuses, "ai", report["ai"]["status"], "decision", report["decision"]["exit_code"])'
+```
+
+## Current Limits
+
+- Live AI acceptance was not run and no model request was made.
+- Native Windows remains out of scope.
+- Scanner databases and scanner behavior remain time-dependent; the successful
+  local scanner evidence reflects the database and tool behavior observed during
+  this run.
+- GitHub-hosted package/action CI was not run in this task; only local workflow
+  definitions and local CLI behavior were verified.
+- No public release asset, public tag, or public `pipx` tag installation was
+  verified in this task.
 
 ## Historical Evidence
 
-Older evidence under `docs/verification/legacy-v2.1/`,
-`docs/verification/legacy-v2/`, and `docs/verification/clean-start/` is retained
-for provenance. Those old counts and failed DNS/bootstrap notes do not describe
-this build.
+The previous CommitScope 2.2.0 scanner-ready evidence from 2026-09-21 is retained
+as historical context only. It reported local unit/protocol tests, host preflight,
+scanner bootstrap, doctor, demo, and scanner-only acceptance for the 2.2.0 build.
+Those results do not describe the 2.3.0 release-preparation state above.
+
+Older provenance remains under `docs/verification/legacy-v2.1/`,
+`docs/verification/legacy-v2/`, and `docs/verification/clean-start/`.

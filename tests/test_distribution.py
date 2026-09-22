@@ -11,6 +11,8 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 RESOURCE_ROOTS = ("config", "prompts", "examples")
 
+from sec_review import __version__
+
 
 def tracked_runtime_resources() -> set[str]:
     listing = subprocess.run(
@@ -30,6 +32,9 @@ def tracked_runtime_resources() -> set[str]:
 class DistributionTests(unittest.TestCase):
     def project_metadata(self):
         return tomllib.loads((ROOT / "pyproject.toml").read_text())
+
+    def test_release_version_is_2_3_0(self):
+        self.assertEqual(__version__, "2.3.0")
 
     def test_project_metadata_and_console_entrypoint(self):
         metadata = self.project_metadata()
