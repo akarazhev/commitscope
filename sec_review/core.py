@@ -17,6 +17,8 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 MAX_OUTPUT = 32 * 1024 * 1024
+INTERRUPT_GRACE_SECONDS = 5
+_MANAGED_EXECUTE_ENV = '_COMMITSCOPE_MANAGED_EXECUTE'
 class ReviewError(Exception):
     """A failed prerequisite or incomplete review, not a clean result."""
 
@@ -192,16 +194,20 @@ class ProcessResult:
 def execute(argv: list[str], cwd: Path, env: dict[str,str], timeout: float, stdin: str | None=None) -> ProcessResult:
     if timeout<=0: raise ReviewError('Timeout must be positive')
     start=time.monotonic(); timed=False
+    managed_parent = os.environ.get(_MANAGED_EXECUTE_ENV) == str(os.getppid())
+    process_env = dict(env)
+    process_env[_MANAGED_EXECUTE_ENV] = str(os.getpid())
     try:
         with tempfile.TemporaryFile() as out, tempfile.TemporaryFile() as err:
-            p=subprocess.Popen(argv,cwd=cwd,env=env,stdin=subprocess.PIPE if stdin is not None else subprocess.DEVNULL,
+            p=subprocess.Popen(argv,cwd=cwd,env=process_env,stdin=subprocess.PIPE if stdin is not None else subprocess.DEVNULL,
                                stdout=out,stderr=err,start_new_session=(os.name=='posix'),shell=False)
             try: p.communicate(None if stdin is None else stdin.encode(),timeout=timeout)
             except subprocess.TimeoutExpired:
                 timed=True
-                _terminate_process(p)
+                if _stop_process(p, allow_cleanup=not managed_parent):
+                    raise KeyboardInterrupt
             except KeyboardInterrupt:
-                _terminate_process(p)
+                _stop_process(p, allow_cleanup=not managed_parent)
                 raise
             out.seek(0); err.seek(0)
             stdout=out.read(MAX_OUTPUT+1); stderr=err.read(MAX_OUTPUT+1)
@@ -210,6 +216,32 @@ def execute(argv: list[str], cwd: Path, env: dict[str,str], timeout: float, stdi
                                  stdout[:MAX_OUTPUT].decode('utf-8','replace'),
                                  stderr[:MAX_OUTPUT].decode('utf-8','replace'),round(time.monotonic()-start,3),timed,truncated)
     except OSError as e: raise ReviewError(f'Cannot start {Path(argv[0]).name}: {e}') from e
+
+
+def _stop_process(process: subprocess.Popen, *, allow_cleanup: bool) -> bool:
+    if os.name != 'posix' or not allow_cleanup:
+        _terminate_process(process)
+        return False
+    try:
+        os.killpg(process.pid, signal.SIGINT)
+    except ProcessLookupError:
+        process.communicate()
+        return False
+    deadline = time.monotonic() + INTERRUPT_GRACE_SECONDS
+    interrupted = False
+    while process.poll() is None:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            _terminate_process(process)
+            return interrupted
+        try:
+            process.communicate(timeout=remaining)
+        except subprocess.TimeoutExpired:
+            _terminate_process(process)
+            return interrupted
+        except KeyboardInterrupt:
+            interrupted = True
+    return interrupted
 
 
 def _terminate_process(process: subprocess.Popen) -> None:
