@@ -13,7 +13,7 @@ from .snapshot import export_snapshot
 from .reports import save_reports
 from .scanners import finding
 from .auth import (corporate_sensitive_values, prepare_account_claude, prepare_claude,
-                   redact_corporate, redact_corporate_value, settings_flags,
+                   redact_account_username, redact_corporate, redact_corporate_value, settings_flags,
                    validate_ai_options, redact_credentials)
 from .policy import _validate_policy
 
@@ -366,8 +366,32 @@ def _redact_corporate_packet(packet: dict, sensitive_values: set[str], max_bytes
     return clean
 
 
+_ACCOUNT_STRUCTURAL_FIELDS = frozenset({'path', 'id', 'finding_id', 'severity', 'status',
+                                        'subtype', 'model', 'auth_method', 'provider'})
+_ACCOUNT_PROTOCOL_KEYS = _ACCOUNT_STRUCTURAL_FIELDS | CORPORATE_CANDIDATE_KEYS | frozenset({
+    'type', 'is_error', 'modelUsage', 'structured_output', 'summary', 'findings',
+    'limitations', 'verdicts', 'reason', 'line', 'inputTokens', 'outputTokens',
+})
+
+
+def _redact_account_output(value, usernames: set[str]):
+    if isinstance(value, str):
+        return redact_account_username(value, usernames)
+    if isinstance(value, list):
+        return [_redact_account_output(item, usernames) for item in value]
+    if isinstance(value, dict):
+        clean = {}
+        for key, item in value.items():
+            clean_key = key if key in _ACCOUNT_PROTOCOL_KEYS else redact_account_username(key, usernames)
+            if clean_key in clean:
+                raise ReviewError('Corporate account redaction produced duplicate JSON keys.')
+            clean[clean_key] = item if key in _ACCOUNT_STRUCTURAL_FIELDS else _redact_account_output(item, usernames)
+        return clean
+    return value
+
+
 def _redact_corporate_result(envelope: dict, stage: str, model: str, packet: dict,
-                             ids: list[str], sensitive_values: set[str]) -> dict:
+                             ids: list[str], sensitive_values: set[str], usernames: set[str]) -> dict:
     value = corporate_structured(json.dumps(envelope, allow_nan=False), model)
 
     def validate(result: dict) -> None:
@@ -377,15 +401,16 @@ def _redact_corporate_result(envelope: dict, stage: str, model: str, packet: dic
             validate_corporate_verifier(result, ids)
 
     validate(value)
-    clean = redact_corporate_value(value, sensitive_values, redact_keys=False)
+    clean = _redact_account_output(redact_corporate_value(value, sensitive_values, redact_keys=False), usernames)
     validate(clean)
     # Keep validated schema keys and envelope constants, not arbitrary model
     # strings. Decision values must remain valid after sanitization as well.
     protocol = {'subtype', 'is_error', 'modelUsage', 'structured_output'}
-    result = redact_corporate_value({key: item for key, item in envelope.items() if key not in protocol},
-                                    sensitive_values)
+    result = _redact_account_output(redact_corporate_value(
+        {key: item for key, item in envelope.items() if key not in protocol}, sensitive_values), usernames)
     result.update(subtype='success', is_error=False,
-                  modelUsage={model: redact_corporate_value(envelope['modelUsage'][model], sensitive_values)},
+                  modelUsage={model: _redact_account_output(
+                      redact_corporate_value(envelope['modelUsage'][model], sensitive_values), usernames)},
                   structured_output=clean)
     corporate_structured(json.dumps(result, allow_nan=False), model)
     return result
@@ -400,7 +425,7 @@ def run_corporate_ai(source: Path, report: dict, policy: dict, out: Path, *,
     state = report['ai']
     # This caller-owned sink stays in memory; never attach auth values to reports.
     sensitive_values = _sensitive_values if _sensitive_values is not None else set()
-    artifacts, results = {}, {}
+    artifacts, results, account_users = {}, {}, set()
     stage, packet = None, None
     try:
         sensitive_values.update(corporate_sensitive_values(os.environ))
@@ -415,6 +440,8 @@ def run_corporate_ai(source: Path, report: dict, policy: dict, out: Path, *,
             with tempfile.TemporaryDirectory(prefix=f'sr-corporate-{stage}-') as directory:
                 work = Path(directory).resolve(strict=True)
                 prepared = prepare_account_claude(work)
+                if prepared.env.get('USER'):
+                    account_users.add(prepared.env['USER'])
                 sensitive_values.update(prepared.sensitive_values)
                 stage_state['authentication'] = prepared.metadata
                 if packet is None:
@@ -431,13 +458,14 @@ def run_corporate_ai(source: Path, report: dict, policy: dict, out: Path, *,
                     raise ReviewError('No source files remain after sensitive material was withheld.')
                 if stage == 'verifier':
                     previous = results.pop('hunter')
-                    results['hunter'] = _redact_corporate_result(previous, 'hunter', model, packet, [], sensitive_values)
+                    results['hunter'] = _redact_corporate_result(previous, 'hunter', model, packet, [],
+                                                                  sensitive_values, account_users)
                 payload = packet if stage == 'hunter' else {
                     'original_packet': packet, 'candidates': results['hunter']['structured_output']['findings']}
                 result = execute(corporate_claude_command(prepared.executable, stage, model, max_turns),
                                  work, prepared.env, timeout, json.dumps(payload, allow_nan=False))
                 stage_state['seconds'] = result.seconds
-                artifacts[f'private/model-logs/{stage}.log'] = result.stderr
+                artifacts[f'private/model-logs/{stage}.log'] = _redact_account_output(result.stderr, account_users)
                 try:
                     envelope = decode_json(result.stdout)
                     json.dumps(envelope, allow_nan=False)
@@ -449,18 +477,21 @@ def run_corporate_ai(source: Path, report: dict, policy: dict, out: Path, *,
                 if result.code != 0 or result.timed_out or result.truncated:
                     raise ReviewError(f'Claude {stage} failed (nonzero exit, timeout or truncated output); no fallback.')
                 ids = [item['id'] for item in results['hunter']['structured_output']['findings']] if stage == 'verifier' else []
-                results[stage] = _redact_corporate_result(envelope, stage, model, packet, ids, sensitive_values)
+                results[stage] = _redact_corporate_result(envelope, stage, model, packet, ids,
+                                                           sensitive_values, account_users)
                 stage_state.update(status='complete', finished_at=now(), model=model)
         state.update(status='complete', finished_at=now())
     except (ReviewError, OSError, KeyError, ValueError, TypeError, RecursionError) as error:
         if stage in state['stages']:
             state['stages'][stage].update(status='failed', finished_at=now())
-        state.update(status='failed', finished_at=now(), error=redact_corporate(str(error), sensitive_values))
+        state.update(status='failed', finished_at=now(), error=_redact_account_output(
+            redact_corporate(str(error), sensitive_values), account_users))
     # Account status is checked independently for each stage. Delay persistence so
     # identifiers learned in either stage are removed from every saved artifact.
     try:
         validated_outputs = {f'private/model-output/{name}.json' for name in results}
-        clean_artifacts = {relative: redact_corporate_value(value, sensitive_values)
+        clean_artifacts = {relative: _redact_account_output(redact_corporate_value(value, sensitive_values),
+                                                            account_users)
                            for relative, value in artifacts.items() if relative not in validated_outputs}
         if packet is not None:
             packet = _redact_corporate_packet(packet, sensitive_values, policy['code_upload']['max_bytes'])
@@ -470,7 +501,8 @@ def run_corporate_ai(source: Path, report: dict, policy: dict, out: Path, *,
             if result_stage not in results:
                 continue
             ids = [item['id'] for item in state['hunter']['findings']] if result_stage == 'verifier' else []
-            envelope = _redact_corporate_result(results[result_stage], result_stage, model, packet, ids, sensitive_values)
+            envelope = _redact_corporate_result(results[result_stage], result_stage, model, packet, ids,
+                                                sensitive_values, account_users)
             state[result_stage] = envelope['structured_output']
             clean_artifacts[f'private/model-output/{result_stage}.json'] = envelope
             clean_artifacts[f'evidence/{result_stage}.json'] = state[result_stage]
@@ -480,7 +512,8 @@ def run_corporate_ai(source: Path, report: dict, policy: dict, out: Path, *,
             else:
                 write_text(out / relative, value)
     except (ReviewError, OSError, ValueError, TypeError, RecursionError) as error:
-        state.update(status='failed', finished_at=now(), error=redact_corporate(str(error), sensitive_values))
+        state.update(status='failed', finished_at=now(), error=_redact_account_output(
+            redact_corporate(str(error), sensitive_values), account_users))
     if state['status'] == 'complete':
         verdicts = {item['finding_id']: item for item in state['verifier']['verdicts']}
         for item in state['hunter']['findings']:

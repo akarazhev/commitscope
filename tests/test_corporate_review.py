@@ -40,6 +40,7 @@ class ReviewFixture(unittest.TestCase):
         self.raw_secret = None
         self.scanner_payload_edit = None
         self.prepared_values = [('DO_NOT_SAVE_ACCOUNT@example.invalid', 'DO_NOT_SAVE_ID')] * 2
+        self.prepared_env = {}
         self.original_execute = scanners.execute
 
     def request(self):
@@ -94,7 +95,7 @@ class ReviewFixture(unittest.TestCase):
         stack.enter_context(patch('sec_review.project.current_tools_root', return_value=self.tools))
         stack.enter_context(patch('sec_review.scanners.execute', side_effect=self.scan_execute))
         stack.enter_context(patch('sec_review.ai.execute', side_effect=self.claude_execute))
-        prepared = [PreparedClaude('/synthetic/claude', {},
+        prepared = [PreparedClaude('/synthetic/claude', self.prepared_env,
                                   {'auth_mode': 'account', 'claude_version': '2.1.999'}, values)
                     for values in self.prepared_values]
         stack.enter_context(patch('sec_review.ai.prepare_account_claude', side_effect=prepared))
@@ -117,6 +118,29 @@ class ReviewFixture(unittest.TestCase):
 
 
 class CorporateReviewTests(ReviewFixture):
+    def test_short_os_username_echo_is_private_and_review_verifies(self):
+        from sec_review.manifest import verify_review
+        self.prepared_env = {'USER': 'ci'}
+        self.hunter['summary'] = 'Account ci; decision remains'
+        original = self.claude_execute
+        def echoed_user(*args, **kwargs):
+            result = original(*args, **kwargs)
+            return ProcessResult(result.code, result.stdout, 'USER=ci; decision remains', result.seconds)
+        self.claude_execute = echoed_user
+        (self.repo / 'decision.py').write_text('pass\n')
+        self.git('add', 'decision.py')
+        self.git('commit', '-qm', 'add decision source')
+        report = self.run_review()
+        self.assertEqual(report['decision']['exit_code'], 0, report)
+        self.assertEqual(verify_review(self.out)[0], 0)
+        packet = read_json(self.out / 'private/ai-input/packet.json')
+        self.assertIn('decision.py', [item['path'] for item in packet['files']])
+        for path in self.out.rglob('*'):
+            if path.is_file():
+                content = path.read_text()
+                self.assertNotIn('USER=ci', content, path)
+                self.assertNotIn('Account ci;', content, path)
+
     def test_sensitive_policy_path_is_sanitized_consistently_in_manifest_and_report(self):
         from sec_review.core import file_hash
         from sec_review.manifest import verify_review

@@ -11,6 +11,7 @@ from pathlib import Path
 import pwd
 import sys
 import tempfile
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 from urllib.parse import quote
@@ -371,6 +372,26 @@ class CorporatePrivacyTests(CorporateFixture):
         self.assertIn('Safe diagnostic;', (self.out / 'private/model-logs/hunter.log').read_text())
         packet = read_json(self.out / 'private/ai-input/packet.json')
         self.assertNotIn('withheld.py', [item['path'] for item in packet['files']])
+
+    def test_os_username_echo_is_redacted_without_changing_source_paths(self):
+        (self.source / 'decision.py').write_text('pass\n')
+        self.config['hunter']['structured_output']['summary'] = 'Account ci; decision remains'
+        self.config['hunter']['ci'] = 'account-key diagnostic'
+        self.config['hunter_stderr'] = 'USER=ci; decision remains'
+        with patch('sec_review.auth.pwd.getpwuid', return_value=SimpleNamespace(pw_name='ci')):
+            result = self.run_review(environment={'USER': 'app.py'})
+        self.assertEqual(result['ai']['status'], 'complete', result['ai'])
+        self.assertEqual(result['ai']['summary'], 'Account [REDACTED_CORPORATE]; decision remains')
+        self.assertEqual(self.calls()[0]['env']['USER'], 'ci')
+        packet = read_json(self.out / 'private/ai-input/packet.json')
+        self.assertIn('decision.py', [item['path'] for item in packet['files']])
+        self.assertNotIn('ci', read_json(self.out / 'private/model-output/hunter.json'))
+        self.assertIn('decision remains', (self.out / 'private/model-logs/hunter.log').read_text())
+        for path in self.out.rglob('*'):
+            if path.is_file():
+                content = path.read_text()
+                self.assertNotIn('USER=ci', content, path)
+                self.assertNotIn('Account ci;', content, path)
 
     def test_all_source_withheld_for_sensitive_content_prevents_model_call(self):
         (self.source / 'app.py').write_text('# ' + self.echo + '\n')

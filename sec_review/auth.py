@@ -201,6 +201,15 @@ def redact_corporate(text: str, sensitive_values: tuple[str, ...] | set[str]) ->
     return redact_credentials(text)
 
 
+def redact_account_username(text: str, usernames: set[str]) -> str:
+    """Remove standalone OS login names echoed by Claude without rewriting words."""
+    for username in sorted(usernames, key=len, reverse=True):
+        if username:
+            text = re.sub(r'(?<!\w)' + re.escape(username) + r'(?!\w)',
+                          '[REDACTED_CORPORATE]', text)
+    return text
+
+
 def redact_corporate_value(value: Any, sensitive_values: tuple[str, ...] | set[str], *,
                            redact_keys: bool = True, public_fields: frozenset[str] = frozenset()) -> Any:
     """Redact JSON strings and keys without changing numbers or escaping semantics."""
