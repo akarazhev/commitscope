@@ -37,6 +37,36 @@ def load_harness():
     return module
 
 
+def load_fixed_eval_fixture():
+    path = ROOT / "examples/ai-acceptance/eval/fixed/app.py"
+    spec = importlib.util.spec_from_file_location("commitscope_fixed_eval_fixture", path)
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+    return module
+
+
+class FixedEvalFixtureTests(unittest.TestCase):
+    def test_calculate_preserves_bounded_arithmetic(self):
+        self.assertEqual(load_fixed_eval_fixture().calculate("(2 + 3) * 4 / 2"), 10)
+
+    def test_calculate_rejects_code_execution(self):
+        with self.assertRaises(ValueError):
+            load_fixed_eval_fixture().calculate("__import__('os').system('echo unsafe')")
+
+    def test_calculate_rejects_division_by_zero_as_invalid_input(self):
+        with self.assertRaises(ValueError):
+            load_fixed_eval_fixture().calculate("4 / (2 - 2)")
+
+    def test_calculate_rejects_deep_expression(self):
+        with self.assertRaises(ValueError):
+            load_fixed_eval_fixture().calculate("1+" * 40 + "1")
+
+    def test_calculate_rejects_malformed_expression_as_invalid_input(self):
+        with self.assertRaises(ValueError):
+            load_fixed_eval_fixture().calculate("1 +")
+
+
 class AIAcceptanceTests(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
