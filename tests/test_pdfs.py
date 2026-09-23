@@ -82,6 +82,71 @@ class PdfTests(unittest.TestCase):
                 build_pdfs.build_pair(en, ru, output)
             self.assertFalse(output.exists())
 
+    @unittest.skipUnless(shutil.which("pdftotext") and shutil.which("pdftoppm"), "Poppler required")
+    def test_semantic_blocks_render_literal_text_wrapped_table_and_figure(self):
+        en, ru = self.converted_pair()
+        label = "Граница доверия между рабочей станцией сотрудника и внешним сервисом Anthropic"
+        for source in (en, ru):
+            document = source["documents"]["methodology"]
+            blocks = document["chapters"][0]["sections"][0]["blocks"]
+            blocks[0]["text"] = "A & B < C [S1]"
+            blocks.extend([
+                {"id": "comparison", "type": "table", "caption": "Table 1. Comparison" if source["language"] == "en" else "Таблица 1. Сравнение",
+                 "headers": ["Criterion", "Result", "Evidence"] if source["language"] == "en" else ["Критерий", "Результат", "Доказательство"],
+                 "rows": [[f"Row {i}", "A long explanatory cell that must wrap instead of shrinking below nine points.", "Auditable observation"] for i in range(30)]},
+                {"id": "wide-comparison", "type": "table", "caption": "Table 2. Wide comparison" if source["language"] == "en" else "Таблица 2. Широкое сравнение",
+                 "headers": ["Option", "Coverage", "Repeatability", "Privacy", "Burden", "Evidence"],
+                 "rows": [["Local", "Combined", "Recorded", "Approved transfer", "Employee time", "Protected run"]]},
+                {"id": "boundary", "type": "diagram", "kind": "boundary",
+                 "caption": "Figure 1. Trust boundary" if source["language"] == "en" else "Рисунок 1. Граница доверия",
+                 "nodes": [{"id": "local", "label": "Employee workstation" if source["language"] == "en" else label},
+                           {"id": "external", "label": "Anthropic service" if source["language"] == "en" else "Сервис Anthropic"}],
+                 "edges": [{"from": "local", "to": "external"}]},
+            ])
+        build_pdfs.pdfmetrics.registerFont(build_pdfs.TTFont("NotoSans", str(PDF_ROOT / "fonts/NotoSans-Regular.ttf")))
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "pdfs"
+            build_pdfs.build_pair(en, ru, output)
+            for language in ("en", "ru"):
+                pdf = output / language / f"security-review-methodology-{language}.pdf"
+                extracted = run("pdftotext", "-layout", str(pdf), "-")
+                self.assertEqual(extracted.returncode, 0, extracted.stderr)
+                self.assertIn("A & B < C", extracted.stdout)
+                self.assertGreaterEqual(extracted.stdout.count("Criterion" if language == "en" else "Критерий"), 2)
+                self.assertIn("Figure 1. Trust boundary" if language == "en" else "Рисунок 1. Граница доверия", extracted.stdout)
+                self.assertIn("https://csrc.nist.gov/pubs/sp/800/218/final", extracted.stdout)
+                self.assertIn("(1/2)", extracted.stdout)
+                self.assertIn("(2/2)", extracted.stdout)
+                for page in extracted.stdout.split("\f"):
+                    if "Wide comparison (1/2)" in page or "Широкое сравнение (1/2)" in page:
+                        self.assertIn("Repeatability", page)
+                self.assertNotIn("\ufffd", extracted.stdout)
+                if language == "ru":
+                    self.assertIn("Граница доверия между", extracted.stdout)
+                preview = Path(directory) / f"{language}-preview"
+                rendered = run("pdftoppm", "-f", "1", "-l", "1", "-r", "120", "-png", "-singlefile", str(pdf), str(preview))
+                self.assertEqual(rendered.returncode, 0, rendered.stderr)
+                self.assertTrue(preview.with_suffix(".png").is_file())
+                if os.environ.get("COMMITSCOPE_PDF_QA_DIR"):
+                    qa = Path(os.environ["COMMITSCOPE_PDF_QA_DIR"])
+                    qa.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(pdf, qa / pdf.name)
+                links = run("pdfinfo", "-url", str(pdf))
+                if links.returncode == 0:
+                    self.assertIn("https://csrc.nist.gov/pubs/sp/800/218/final", links.stdout)
+
+    def test_decision_diagram_reserves_space_for_four_outcomes(self):
+        block = {"kind": "decision", "nodes": [
+            {"id": "root", "label": "Result"},
+            {"id": "ready", "label": "Ready for review"},
+            {"id": "findings", "label": "Findings require triage"},
+            {"id": "incomplete", "label": "Incomplete"},
+        ]}
+        style = build_pdfs.ParagraphStyle("diagram-test", fontName="Helvetica", fontSize=9, leading=12)
+        diagram = build_pdfs.DiagramFlowable(block, style)
+        diagram.wrap(507, 700)
+        self.assertGreater(diagram.height, diagram.box_heights[0] + max(diagram.box_heights[1:3]) + diagram.box_heights[3] + 30)
+
     def test_sources_pdfs_and_font_are_exact_distribution_inputs(self):
         manifest = json.loads((ROOT / "config/sdist-manifest.json").read_text())["files"]
         expected = list(PDF_NAMES) + [
