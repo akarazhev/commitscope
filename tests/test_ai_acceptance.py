@@ -92,7 +92,8 @@ class FixedIdorFixtureTests(unittest.TestCase):
                 self.fixture.get_order(token, "order-2")
 
     def test_missing_signing_key_fails_closed(self):
-        with patch.dict(os.environ, {"SYNTHETIC_IDOR_SESSION_SIGNING_KEY": ""}):
+        with patch.dict(os.environ):
+            del os.environ["SYNTHETIC_IDOR_SESSION_SIGNING_KEY"]
             with self.assertRaises(RuntimeError):
                 self.fixture.get_order(self.signed_session("tenant-a"), "order-1")
 
