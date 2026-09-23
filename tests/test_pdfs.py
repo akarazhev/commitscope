@@ -1,5 +1,7 @@
 import hashlib
+import copy
 import json
+import importlib.util
 import os
 from pathlib import Path
 import shutil
@@ -10,6 +12,9 @@ import unittest
 
 
 ROOT = Path(__file__).resolve().parents[1]
+BUILDER_SPEC = importlib.util.spec_from_file_location("build_pdfs", ROOT / "scripts/build_pdfs.py")
+build_pdfs = importlib.util.module_from_spec(BUILDER_SPEC)
+BUILDER_SPEC.loader.exec_module(build_pdfs)
 PDF_ROOT = ROOT / "docs/security-review-pdfs"
 PDF_NAMES = tuple(
     f"{language}/{name}"
@@ -28,6 +33,55 @@ def run(*args, **kwargs):
 
 
 class PdfTests(unittest.TestCase):
+    @staticmethod
+    def converted_pair():
+        active = {
+            "id": "methodology", "title": "Example", "subject": "Example", "footer": "Example",
+            "references": [{"id": "S1", "title": "NIST SSDF 1.1",
+                            "url": "https://csrc.nist.gov/pubs/sp/800/218/final",
+                            "checked": "2026-09-23"}],
+            "chapters": [{"id": "m01", "title": "Decision", "sections": [{
+                "id": "scope", "heading": "Scope", "blocks": [{"id": "claim",
+                "type": "paragraph", "text": "Reviewed scope [S1].", "citations": ["S1"]}]
+            }]}],
+        }
+        en = {"language": "en", "version": "2.4.0", "documents": {"methodology": active}}
+        ru = copy.deepcopy(en)
+        ru["language"] = "ru"
+        ru["documents"]["methodology"]["chapters"][0]["title"] = "Решение"
+        return en, ru
+
+    def test_active_source_ids_and_citations_are_validated(self):
+        en, ru = self.converted_pair()
+        build_pdfs.validate_source(en, "en")
+        build_pdfs.validate_pair(en, ru)
+        for change in ("duplicate", "unknown citation", "http URL", "unknown type"):
+            with self.subTest(change=change):
+                bad = copy.deepcopy(en)
+                document = bad["documents"]["methodology"]
+                block = document["chapters"][0]["sections"][0]["blocks"][0]
+                if change == "duplicate":
+                    document["chapters"][0]["sections"][0]["blocks"].append(copy.deepcopy(block))
+                elif change == "unknown citation":
+                    block["citations"] = ["S9"]
+                elif change == "http URL":
+                    document["references"][0]["url"] = "http://example.invalid/source"
+                else:
+                    block["type"] = "missing"
+                with self.assertRaises(ValueError):
+                    build_pdfs.validate_source(bad, "en")
+
+    def test_english_russian_structure_must_match(self):
+        en, ru = self.converted_pair()
+        ru["documents"]["methodology"]["chapters"][0]["sections"] = []
+        with self.assertRaises(ValueError):
+            build_pdfs.validate_pair(en, ru)
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "pdfs"
+            with self.assertRaises(ValueError):
+                build_pdfs.build_pair(en, ru, output)
+            self.assertFalse(output.exists())
+
     def test_sources_pdfs_and_font_are_exact_distribution_inputs(self):
         manifest = json.loads((ROOT / "config/sdist-manifest.json").read_text())["files"]
         expected = list(PDF_NAMES) + [
