@@ -1,4 +1,5 @@
 import copy
+import base64
 from dataclasses import FrozenInstanceError
 import hashlib
 import json
@@ -70,6 +71,46 @@ class PolicyTests(unittest.TestCase):
         self.assertEqual(request.policy_sha256, hashlib.sha256(self.policy_path.read_bytes()).hexdigest())
         with self.assertRaises(FrozenInstanceError):
             request.commit_sha = 'changed'
+        self.assertFalse(self.out.exists())
+
+    def test_recognizable_credentials_in_policy_fail_before_output_without_echo(self):
+        basic = base64.b64encode(b'fixture-user:fixture-password').decode('ascii')
+        credentials = (
+            'Authorization: ' + 'Bearer fixture-policy-token-123456',
+            'Authorization: ' + 'Basic ' + basic,
+            '{"Authorization": "' + 'Bearer fixture-policy-token-123456"}',
+            "{'Authorization': '" + 'Basic ' + basic + "'}",
+            'headers["Authorization"] = "' + 'Bearer fixture-policy-token-123456"',
+            'https://' + 'fixture-user:fixture-password@proxy.invalid:8443/path',
+            'AKIA' + 'A' * 16,
+            'ASIA' + 'B' * 16,
+            'ghp_' + 'A' * 24,
+            'github_pat_' + 'C' * 24,
+            'sk-ant-' + 'B' * 24,
+            'sk_live_' + 'D' * 24,
+            'sk_test_' + 'E' * 24,
+            'xoxb-' + 'F' * 24,
+            '-----BEGIN ' + 'PRIVATE KEY-----',
+            'api_key="fixture-policy-secret-123456"',
+        )
+        for index, credential in enumerate(credentials):
+            with self.subTest(index=index):
+                value = copy.deepcopy(POLICY)
+                value['scope']['description'] = credential
+                self.write_policy(value)
+                with self.assertRaises(ReviewError) as caught:
+                    self.request()
+                self.assertNotIn(credential, str(caught.exception))
+                self.assertFalse(self.out.exists())
+
+    def test_encoded_duplicate_credential_key_never_appears_in_error(self):
+        key = 'Authorization: Bearer fixture-escaped-token-123456'
+        encoded = key.replace(':', '\\u003a')
+        self.policy_path.write_text('{"' + encoded + '":1,"' + encoded + '":2}')
+        with self.assertRaises(ReviewError) as caught:
+            self.request()
+        self.assertNotIn(key, str(caught.exception))
+        self.assertIn('Duplicate JSON key', str(caught.exception))
         self.assertFalse(self.out.exists())
 
     def test_duplicate_keys_at_every_object_level(self):

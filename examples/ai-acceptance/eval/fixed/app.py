@@ -38,6 +38,8 @@ def _evaluate(node, depth=0):
 def calculate(expression: str):
     if len(expression) > 200:
         raise ValueError("Expression is too long")
+    if "\x00" in expression:
+        raise ValueError("Invalid arithmetic expression")
     try:
         return _evaluate(ast.parse(expression, mode="eval"))
     except (SyntaxError, UnicodeEncodeError, ZeroDivisionError) as error:

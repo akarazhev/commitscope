@@ -4,9 +4,9 @@ Upstream documentation records assumptions; it does not prove that a local tool,
 credential, scanner database, model request, or hosted workflow succeeded. Version
 pins are deliberate reviewed selections, not a promise to always track the latest.
 
-## Claude Code Recheck - 2026-09-22
+## Claude Code Recheck - 2026-09-23
 
-The following official Claude Code pages were rechecked on **2026-09-22**:
+The following official Claude Code pages were rechecked on **2026-09-23**:
 
 | Official reference | Project use |
 |---|---|
@@ -14,6 +14,8 @@ The following official Claude Code pages were rechecked on **2026-09-22**:
 | https://code.claude.com/docs/en/authentication | First-party claude.ai account login, supported account types, credential precedence, and the risk that an ambient API key can supersede a saved login. |
 | https://code.claude.com/docs/en/model-config | Model aliases can change resolution; a full model name is the documented pinning mechanism. |
 | https://code.claude.com/docs/en/headless | Noninteractive `-p`, JSON output, `--json-schema`, structured-output fields, and programmatic failure behavior. |
+| https://github.com/anthropics/claude-code/releases/tag/v2.1.259 | First release adding `--permission-prompts none`; corporate review requires this version or newer. |
+| https://platform.claude.com/docs/en/about-claude/models/model-ids-and-versions | Full `claude-sonnet-5` ID is a pinned model version, not a moving alias. |
 
 Those pages support the adapter shape but not every CommitScope policy choice.
 CommitScope deliberately requires saved first-party account auth, rejects ambient

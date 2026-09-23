@@ -64,9 +64,13 @@ class PdfTests(unittest.TestCase):
                     self.assertIn("Verifier", text.stdout)
                     if relative.startswith("en/"):
                         self.assertIn("Hunter and Verifier are mandatory", text.stdout)
+                        self.assertIn("Claude Code 2.1.259 or newer", text.stdout)
+                        self.assertIn("Bearer/Basic authorization values", text.stdout)
                         self.assertIn("SCANNERS_VERIFIED_AI_NOT_RUN is not completed corporate acceptance", " ".join(text.stdout.split()))
                     else:
                         self.assertIn("Hunter и Verifier обязательны", text.stdout)
+                        self.assertIn("Claude Code 2.1.259 или новее", text.stdout)
+                        self.assertIn("Bearer/Basic", text.stdout)
                         self.assertIn("SCANNERS_VERIFIED_AI_NOT_RUN не означает завершенную корпоративную проверку", " ".join(text.stdout.split()))
                     self.assertNotRegex(text.stdout.lower(), r"ai is optional|optional ai|ии необязателен")
                 if "legacy" in relative:

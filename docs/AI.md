@@ -17,6 +17,10 @@ Corporate review requires all of the following:
 - tools disabled, no permission prompts, empty MCP configuration, ordinary settings
   discovery disabled, no slash commands, and no session persistence.
 
+`--permission-prompts none` requires Claude Code 2.1.259 or newer. The local version
+and account are checked before scanners create run artifacts, and independently before
+each model stage. An older CLI stops the review without a weaker launch mode.
+
 See [Authentication](AUTHENTICATION.md) for the account contract. Account login,
 quota, timeout, model, transport, output, or schema failure makes the whole run
 `INCOMPLETE`. There is no API-key, provider, alias, or less restricted fallback.
@@ -27,6 +31,10 @@ The source packet contains the reviewed policy context, normalized scanner findi
 and selected files from the immutable snapshot. Policy limits file count and UTF-8
 bytes. Gitleaks-hit files, credential-like paths, private-key material, unsupported
 content, and out-of-scope files are withheld and listed with reasons.
+The external policy is screened before scanner execution for recognizable credential
+forms, including Bearer/Basic authorization values and URLs with user information.
+Recognized forms in source files cause the whole file to be withheld; recognized
+forms in normalized evidence are redacted.
 
 These controls reduce disclosure; they do not prove that the packet contains no secret
 or sensitive business data. The operator must confirm account terms and company data
@@ -43,6 +51,11 @@ Hunter receives the packet and returns schema-validated candidate findings. Veri
 starts as a separate process, receives the original packet and Hunter candidates, and
 must issue exactly one supported, rejected, or unresolved verdict for each candidate.
 The requested exact model ID must be the only model reported in each response.
+The prompts require a current, source-supported path from attacker control to a
+concrete impact within the policy threat model. Factual hardening suggestions that
+depend only on hypothetical future changes or unshown secret compromise are not
+supported security findings. A plausible candidate with an unknown material
+precondition remains in the evidence for Verifier to mark `unresolved`.
 
 Each candidate remains visible. A rejected candidate records counterevidence rather
 than disappearing; an unresolved candidate remains available for human investigation.

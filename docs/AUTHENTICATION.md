@@ -5,6 +5,12 @@ CLI binary, or inference client is bundled.
 
 Account login is the only supported authentication mode for corporate review.
 Legacy `--auth api` mode is not a corporate review path.
+Corporate review requires Claude Code 2.1.259 or newer for
+`--permission-prompts none`. The pinned new-install version is 2.1.278. The installer
+wrapper does not upgrade an existing CLI; update older installations through the
+official channel and verify `claude --version`.
+Run `claude update` for native installations or
+`brew upgrade --cask claude-code` for Homebrew installations.
 
 ## Sign In To Claude Code
 
@@ -73,6 +79,7 @@ Treat both the workstation's Claude data and the review directory as confidentia
 | Symptom | Action |
 |---|---|
 | Claude Code is missing | Install the official CLI with `sh scripts/install-claude.sh`, then verify `claude --version`. |
+| Claude Code is older than 2.1.259 | Update it through the official installation channel and recheck `claude --version` before review. |
 | Corporate login check fails | Run `claude auth login` as the review OS user and inspect `claude auth status`. |
 | Ambient override is rejected | Remove or resolve the named API/provider/profile/model variable; do not bypass the check. |
 | Login works interactively but not in the review session | Use the same `HOME`, OS user, absolute `CLAUDE_CONFIG_DIR`, and unlocked credential store. |

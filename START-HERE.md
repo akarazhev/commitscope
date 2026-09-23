@@ -31,7 +31,14 @@ first-party claude.ai account login:
 sh scripts/install-claude.sh
 claude auth login
 claude auth status
+claude --version
 ```
+
+Corporate review requires Claude Code 2.1.259 or newer for `--permission-prompts
+none`; the installer pins 2.1.278 but never upgrades an existing CLI. Update older
+installations through the official channel and recheck `claude --version`.
+Use `claude update` for a native install or `brew upgrade --cask claude-code` for
+Homebrew.
 
 Run login and CommitScope as the same unprivileged OS user. Remove or resolve ambient
 API keys, provider routing, model overrides, and profile overrides before the review;
@@ -52,6 +59,8 @@ Review `examples/review-policy.json`, then place the approved policy outside the
 repository. Choose a new output path outside the target. Its existing parent must be
 owned by the current user or root and must not be group/world writable. CommitScope
 refuses symlinked paths and existing output directories.
+Remove recognizable credential forms from the policy before running. The policy and
+source packet screens are heuristic and cannot promise detection of unknown secrets.
 
 ## 4. Run One Review Command
 

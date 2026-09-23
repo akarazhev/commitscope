@@ -7,13 +7,15 @@ import pwd
 import tempfile
 
 from .ai import CORPORATE_SECRET_MATERIAL, run_corporate_ai, validate_exact_model
-from .auth import corporate_sensitive_values, redact_account_username, redact_corporate_value, validate_ai_options
+from .auth import (corporate_sensitive_values, prepare_account_claude, redact_account_username,
+                   redact_corporate_value, validate_ai_options)
 from .core import ReviewError, digest, file_hash, no_symlinks, now, private_dir, read_json, write_bytes, write_json, write_text
 from .manifest import write_manifest
 from .policy import ReviewRequest
 from .project import run_scan
 from .reports import corporate_decision, save_reports
 from .scanners import corporate_scanner_findings, parse_gitleaks, parse_semgrep, parse_trivy
+from .secret_material import redact_secret_material
 from .snapshot import export_snapshot
 
 
@@ -24,26 +26,37 @@ SCANNER_PATH_FIELDS = frozenset({'path', 'File', 'Target', 'FilePath', 'PkgPath'
 PROTOCOL_FIELDS = (FINDING_FIELDS - {'path'}) | frozenset({
     'schema_version', 'project_version', 'run_id', 'head', 'commit_sha', 'snapshot_sha256',
     'sha256', 'raw_sha256', 'policy_sha256', 'name', 'model', 'model_requested', 'subtype',
-    'fail_on', 'started_at', 'finished_at', 'content', 'raw_report', 'raw_privacy',
+    'fail_on', 'started_at', 'finished_at', 'raw_report', 'raw_privacy',
 })
 
 
 def normalize_evidence(value, sensitive_values=(), *, protected_fields=frozenset(), redact_keys=True):
     """Remove known credential forms from scanner-controlled and model prose."""
     sensitive = set(sensitive_values) | set(corporate_sensitive_values(os.environ))
-    def clean(item):
+    def clean(item, *, untrusted=False):
         if isinstance(item, str):
             return CORPORATE_SECRET_MATERIAL.sub('[REDACTED_CORPORATE]',
                                                   redact_corporate_value(item, sensitive))
         if isinstance(item, list):
-            return [clean(child) for child in item]
+            return [clean(child, untrusted=untrusted) for child in item]
         if isinstance(item, dict):
             result = {}
             for key, child in item.items():
-                clean_key = clean(key) if redact_keys else key
+                # Scanner database and coverage metadata may use any field name.
+                # A coincidental protocol name must not exempt its value or key.
+                clean_key = clean(key) if redact_keys or untrusted else CORPORATE_SECRET_MATERIAL.sub(
+                    '[REDACTED_CORPORATE]', key)
                 if clean_key in result:
                     raise ReviewError('Corporate redaction produced duplicate JSON keys.')
-                result[clean_key] = child if key in protected_fields else clean(child)
+                child_untrusted = untrusted or key in ('database', 'coverage')
+                protected = not child_untrusted and key in protected_fields
+                if protected:
+                    try:
+                        result[clean_key] = redact_secret_material(child)
+                    except ValueError:
+                        raise ReviewError('Corporate credential redaction produced duplicate JSON keys.') from None
+                else:
+                    result[clean_key] = clean(child, untrusted=child_untrusted)
             return result
         return item
     return clean(value)
@@ -250,6 +263,10 @@ def run_review(request: ReviewRequest, *, model: str, timeout: int, max_turns: i
     policy_bytes.decode('utf-8')
     if normalize_evidence(request.policy) != request.policy:
         raise ReviewError('Policy contains credential material; remove it before review')
+    # Fail before run_scan creates the output tree, even when the CLI is invoked
+    # directly through run_review rather than the public command.
+    with tempfile.TemporaryDirectory(prefix='sr-corporate-preflight-') as directory:
+        prepare_account_claude(Path(directory))
     report = run_scan(request.repo, request.out, ref=request.commit_sha,
                       fail_on=request.policy['fail_threshold'], timeout=scanner_timeout,
                       allow_empty_sca=allow_empty_sca, defer_reports=True)

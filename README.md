@@ -32,7 +32,14 @@ Code CLI separately, then sign in as the unprivileged OS user who will run revie
 sh scripts/install-claude.sh
 claude auth login
 claude auth status
+claude --version
 ```
+
+Corporate review requires Claude Code 2.1.259 or newer; 2.1.278 is the pinned
+new-install version. The wrapper leaves an existing installation unchanged. Update
+an older CLI through its official installation channel before running a review.
+For native installs run `claude update`; for Homebrew run
+`brew upgrade --cask claude-code`, then check `claude --version`.
 
 Account login is the only corporate authentication path. See
 [Authentication](docs/AUTHENTICATION.md) before using a managed workstation.
@@ -44,6 +51,9 @@ Git worktree, `--ref` must be a full lowercase 40- or 64-character commit ID, an
 new output path must be outside the target under protected storage. The policy file,
 its parent directory, and the output parent must be owned by the current user or root
 and must not be group/world writable.
+The policy is screened for recognizable credentials before scanners or model calls.
+Remove Bearer/Basic authorization values, URLs with user information, and other
+credential-like material. This heuristic cannot identify every unknown secret.
 
 ```bash
 commitscope review \

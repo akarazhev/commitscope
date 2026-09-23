@@ -144,6 +144,7 @@
     "sec_review/reports.py",
     "sec_review/resources.py",
     "sec_review/scanners.py",
+    "sec_review/secret_material.py",
     "sec_review/snapshot.py",
     "sec_review/tools.py",
     "sec_review_build.py",

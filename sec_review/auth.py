@@ -21,6 +21,7 @@ from .core import ReviewError, child_env, decode_json, execute
 from .paths import current_resource_root
 
 AUTH_MODES = ('subscription', 'api')
+MIN_CORPORATE_CLAUDE_VERSION = (2, 1, 259)
 CREDENTIAL_ENV_KEYS = ('ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'CLAUDE_CODE_OAUTH_TOKEN')
 CORPORATE_BLOCKED_ENV_PREFIXES = ('ANTHROPIC_', 'CLAUDE_CODE_USE_')
 CORPORATE_BLOCKED_ENV_NAMES = (
@@ -325,6 +326,10 @@ def prepare_account_claude(work: Path) -> PreparedClaude:
     match = re.search(r'(?<![0-9])([0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,4})(?![0-9])', version.stdout)
     if version.code != 0 or version.timed_out or version.truncated or not match:
         raise ReviewError('Cannot determine the corporate Claude CLI version.')
+    if tuple(map(int, match.group(1).split('.'))) < MIN_CORPORATE_CLAUDE_VERSION:
+        raise ReviewError('Corporate review requires Claude Code 2.1.259 or newer for '
+                          '--permission-prompts none. Run claude update for a native install or '
+                          'brew upgrade --cask claude-code for Homebrew, then check claude --version.')
     result = execute([executable, *common, 'auth', 'status'], work, env, 30)
     if result.code != 0 or result.timed_out or result.truncated:
         raise ReviewError('Corporate account login check failed; run claude auth login. No fallback was attempted.')

@@ -40,12 +40,19 @@ Install the official Claude Code CLI separately for the corporate workflow:
 sh scripts/install-claude.sh
 claude auth login
 claude auth status
+claude --version
 ```
 
 The installer wrapper does not replace an existing Claude Code installation. Review
 the upstream installer policy and run the CLI as the same unprivileged OS account used
 for `commitscope review`. Account login is required; API credentials are not a corporate
 alternative.
+Corporate review requires Claude Code 2.1.259 or newer because it always passes
+`--permission-prompts none`. The wrapper pins 2.1.278 for a new installation. If an
+older CLI is present, update it through its official installation channel and confirm
+`claude --version` before running a review.
+For native installs use `claude update`; for Homebrew use
+`brew upgrade --cask claude-code`.
 
 ## Scanner State
 
@@ -81,6 +88,7 @@ publisher. Inspect install receipts and retain the reviewed tool lock.
 | Wrong scanner version | Reinstall from the reviewed lock; `doctor` must pass. |
 | Trivy data stale or missing | Refresh through approved network access and inspect recorded metadata. |
 | Claude login missing | Run `claude auth login` as the review user; do not substitute an API key. |
+| Claude Code older than 2.1.259 | Update the official CLI, then check `claude --version`; no less restricted fallback is used. |
 | Corporate override rejected | Remove or resolve the named provider/profile/model environment setting. |
 | Output already exists | Preserve it and choose a new protected run directory. |
 

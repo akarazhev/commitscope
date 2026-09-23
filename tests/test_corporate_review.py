@@ -99,6 +99,7 @@ class ReviewFixture(unittest.TestCase):
         prepared = [PreparedClaude('/synthetic/claude', self.prepared_env,
                                   {'auth_mode': 'account', 'claude_version': '2.1.999'}, values)
                     for values in self.prepared_values]
+        stack.enter_context(patch('sec_review.corporate.prepare_account_claude', return_value=prepared[0]))
         stack.enter_context(patch('sec_review.ai.prepare_account_claude', side_effect=prepared))
         return stack
 
@@ -119,6 +120,69 @@ class ReviewFixture(unittest.TestCase):
 
 
 class CorporateReviewTests(ReviewFixture):
+    def test_cli_rejects_secret_policy_before_scanners_without_echo(self):
+        policy = read_json(self.policy_path)
+        credential = 'Authorization: ' + 'Bearer fixture-cli-token-123456'
+        policy['threat_model']['assets'] = [credential]
+        write_json(self.policy_path, policy)
+        arguments = ['review', '--repo', str(self.repo), '--ref', self.git('rev-parse', 'HEAD'),
+                     '--policy', str(self.policy_path), '--out', str(self.out), '--auth', 'account',
+                     '--allow-code-upload', '--model', MODEL]
+        errors = io.StringIO()
+        with patch('sec_review.cli.run_review') as review, \
+             patch('sec_review.corporate.run_scan') as scan, \
+             patch('sec_review.cli.run_scan') as partial_scan, \
+             patch('sys.stderr', errors):
+            self.assertEqual(cli.main(arguments), 2)
+        review.assert_not_called()
+        scan.assert_not_called()
+        partial_scan.assert_not_called()
+        self.assertFalse(self.out.exists())
+        self.assertNotIn(credential, errors.getvalue())
+
+    def test_normalized_evidence_redacts_recognizable_credentials(self):
+        import base64
+        from sec_review.corporate import PROTOCOL_FIELDS, normalize_evidence
+        basic = base64.b64encode(b'fixture-user:fixture-password').decode('ascii')
+        forms = (
+            'Authorization: ' + 'Bearer fixture-report-token-123456',
+            'Authorization: ' + 'Basic ' + basic,
+            '{"Authorization": "' + 'Bearer fixture-report-token-123456"}',
+            "{'Authorization': '" + 'Basic ' + basic + "'}",
+            'headers["Authorization"] = "' + 'Bearer fixture-report-token-123456"',
+            'https://' + 'fixture-user:fixture-password@proxy.invalid/path',
+            'ghp_' + 'A' * 24,
+        )
+        for form in forms:
+            with self.subTest(form=form.split(' ', 1)[0]):
+                evidence = normalize_evidence({'detail': 'prefix ' + form + ' suffix'})
+                self.assertNotIn(form, json.dumps(evidence))
+                self.assertIn('[REDACTED_CORPORATE]', evidence['detail'])
+                nested = normalize_evidence({'scanners': [{'database': {
+                    'name': form, form: 'fixture metadata'}}]},
+                    protected_fields=PROTOCOL_FIELDS, redact_keys=False)
+                self.assertNotIn(form, json.dumps(nested))
+        marker = 'fixture-proxy-password'
+        nested = normalize_evidence({'scanners': [{'name': 'semgrep',
+            'database': {'name': marker, 'model': marker, 'status': marker,
+                         marker: 'fixture metadata'}}]}, {marker},
+            protected_fields=PROTOCOL_FIELDS, redact_keys=False)
+        self.assertEqual(nested['scanners'][0]['name'], 'semgrep')
+        self.assertNotIn(marker, json.dumps(nested))
+
+    def test_unsupported_claude_stops_before_scanners_and_artifacts(self):
+        from sec_review.core import ReviewError
+        from sec_review.corporate import run_review
+        request = self.request()
+        with patch('sec_review.corporate.prepare_account_claude',
+                   side_effect=ReviewError('Claude Code 2.1.259 or newer required')) as preflight, \
+             patch('sec_review.corporate.run_scan') as scan:
+            with self.assertRaisesRegex(ReviewError, '2.1.259'):
+                run_review(request, model=MODEL, timeout=240, max_turns=3)
+        preflight.assert_called_once()
+        scan.assert_not_called()
+        self.assertFalse(self.out.exists())
+
     def test_os_account_name_is_removed_from_absolute_metadata_and_scanner_paths(self):
         from sec_review.manifest import verify_review
         account_root = self.root / 'ci'

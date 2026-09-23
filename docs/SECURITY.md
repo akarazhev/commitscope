@@ -39,13 +39,18 @@ fallback is attempted.
 ## Source Transfer And Model Isolation
 
 `--allow-code-upload` is explicit operator consent. Before any model call, Gitleaks
-must complete and the reviewed policy must permit upload. The packet is limited by
+must complete and the reviewed policy must permit upload. The external policy is
+screened for recognizable credential forms before scanner execution or artifact
+creation; this includes Bearer/Basic authorization values and URLs with user
+information. The packet is limited by
 file count and UTF-8 byte budget. Credential-like filenames, private-key markers,
 Gitleaks-hit files, unsupported content, and out-of-scope files are omitted with a
-reason. This reduces exposure but is not complete secret sanitization.
+reason. These heuristic checks reduce exposure but cannot detect every unknown secret.
 
 Hunter and Verifier run as fresh CLI processes with tools disabled, no permission
 prompts, an empty MCP configuration, no slash commands, and no session persistence.
+This path requires Claude Code 2.1.259 or newer, checked before scanners and again
+before each model call.
 Managed settings, the official executable, the OS, approved proxy configuration, and
 the remote service remain trusted. The model cannot modify the repository, run a
 reproduction, remove scanner findings, or approve a merge.

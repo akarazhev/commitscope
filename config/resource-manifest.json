@@ -43,7 +43,7 @@
     },
     {
       "path": "config/sdist-manifest.json",
-      "sha256": "2d4dcac7b449f342338c0023a05dfd9de3bbb6e2f0f92b65dc09931501b2f1bd"
+      "sha256": "c49c979953890a9bf436071cff1261a1e4d1a69527604bc5163ea86b5791ba5c"
     },
     {
       "path": "config/semgrep.yaml",
@@ -63,7 +63,7 @@
     },
     {
       "path": "examples/ai-acceptance/eval/fixed/app.py",
-      "sha256": "3e584aba476e796f9ba33598bc92b00e760cd2a592eec1ed37de53ca6bbae2a1"
+      "sha256": "223f2f4cd198f6ee39e34863f593b8acaa9cee9da930da417113e47594593f7d"
     },
     {
       "path": "examples/ai-acceptance/eval/vulnerable/app.py",
@@ -119,11 +119,11 @@
     },
     {
       "path": "prompts/corporate-hunter.md",
-      "sha256": "1c030040767eb23ed699bb44b8ded3e3b89c82ef632e3c17e971590eacbbff8c"
+      "sha256": "b0d6b4fe07e1d55274ae06cbc1d080eb4f23c85c5697889e048a17e193664ae2"
     },
     {
       "path": "prompts/corporate-verifier.md",
-      "sha256": "b7af62697d2009edd53cae16bed0c268f0d6c1e31bff14b433b834cd7979d386"
+      "sha256": "6355ecee8cc7ae1a117d4799a195d695275376a265d536a8a50f5daaa8028dbc"
     },
     {
       "path": "prompts/hunter.md",
@@ -139,7 +139,7 @@
     },
     {
       "path": "tests/test_ai_acceptance.py",
-      "sha256": "0cdfe7d87b1452fc6fbe5eea39da57058e7ebd3d4d4c4ddf49f1b9528fef69c5"
+      "sha256": "de71677aaf1d1b48a3b8a80d52700374c8a480c349a705986fa1c72935b41993"
     },
     {
       "path": "tests/test_demo_app.py",

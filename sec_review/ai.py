@@ -16,6 +16,7 @@ from .auth import (corporate_sensitive_values, prepare_account_claude, prepare_c
                    redact_account_username, redact_corporate, redact_corporate_value, settings_flags,
                    validate_ai_options, redact_credentials)
 from .policy import _validate_policy
+from .secret_material import CORPORATE_SECRET_MATERIAL, redact_secret_material
 
 CODE_SUFFIXES={'.py','.js','.jsx','.ts','.tsx','.go','.rs','.java','.rb','.php','.sql','.c','.h','.cpp','.cs'}
 
@@ -157,15 +158,6 @@ CORPORATE_CANDIDATE_KEYS = {
     'id', 'severity', 'path', 'line', 'title', 'attacker_control', 'trace', 'impact',
     'evidence', 'counterarguments', 'reproduction_plan',
 }
-CORPORATE_SECRET_MATERIAL = re.compile(
-    r'PRIVATE KEY-----|\b(?:AKIA|ASIA)[A-Z0-9]{16}\b|\bgh[pousr]_[A-Za-z0-9]{20,}'
-    r'|\bgithub_pat_[A-Za-z0-9_]{20,}|\bsk-ant-[A-Za-z0-9_-]{20,}'
-    r'|\bsk_(?:live|test)_[A-Za-z0-9]{20,}|\bxox[baprs]-[A-Za-z0-9-]{20,}'
-    r'|(?i:(?:password|passwd|api[_-]?key|token|secret)'
-    r'[\s\"\']*[:=]\s*[\"\'][^\"\'\r\n]{8,}[\"\'])'
-)
-
-
 def validate_exact_model(model: str) -> str:
     aliases = {'sonnet', 'opus', 'haiku', 'default', 'best',
                'claude-sonnet', 'claude-opus', 'claude-haiku', 'claude-default', 'claude-best'}
@@ -353,7 +345,7 @@ def _redact_corporate_packet(packet: dict, sensitive_values: set[str], max_bytes
             path = item['path']
             if CORPORATE_SECRET_MATERIAL.search(path) or redact_corporate(path, sensitive_values) != path:
                 raise ReviewError('Corporate packet contains a sensitive source or scanner path; evidence withheld.')
-    clean = redact_corporate_value(packet, sensitive_values, redact_keys=False)
+    clean = redact_secret_material(redact_corporate_value(packet, sensitive_values, redact_keys=False))
     files = []
     for original, item in zip(packet['files'], clean['files']):
         if original['path'] != item['path']:

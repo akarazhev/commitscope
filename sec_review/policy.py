@@ -7,6 +7,7 @@ import re
 from typing import Any
 
 from .core import ReviewError, decode_json, digest, no_symlinks, protected_path_stat, safe_path
+from .secret_material import contains_secret_material, CORPORATE_SECRET_MATERIAL
 from .snapshot import git, resolve_exact_commit
 
 MAX_POLICY_BYTES = 1024 * 1024
@@ -64,6 +65,8 @@ def _glob(value: str) -> None:
 
 
 def _validate_policy(value: Any) -> dict[str, Any]:
+    if contains_secret_material(value):
+        raise ReviewError('Policy contains recognizable credential material; remove it before review.')
     _keys(value, {'schema_version', 'owner', 'scope', 'threat_model', 'invariants',
                   'fail_threshold', 'code_upload'}, 'policy')
     if value['schema_version'] != '1.0':
@@ -127,7 +130,15 @@ def _load_policy(path: Path, repo: Path) -> tuple[dict[str, Any], str]:
             raw = source.read(MAX_POLICY_BYTES + 1)
         if len(raw) > MAX_POLICY_BYTES:
             raise ReviewError('Policy exceeds the 1 MiB size limit')
-        value = decode_json(raw.decode('utf-8'))
+        text = raw.decode('utf-8')
+        if CORPORATE_SECRET_MATERIAL.search(text):
+            raise ReviewError('Policy contains recognizable credential material; remove it before review.')
+        try:
+            value = decode_json(text)
+        except ReviewError as error:
+            if 'Duplicate JSON key' in str(error):
+                raise ReviewError('Duplicate JSON key in review policy.') from None
+            raise ReviewError('Invalid review policy JSON.') from None
     except (OSError, UnicodeError) as e:
         raise ReviewError(f'Cannot read review policy: {e}') from e
     return _validate_policy(value), digest(raw)

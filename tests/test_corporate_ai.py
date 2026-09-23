@@ -4,6 +4,7 @@ These tests never inspect an operator login or invoke the installed Claude binar
 They verify local protocol handling, not live CLI compatibility or model quality.
 """
 from contextlib import contextmanager
+import base64
 import copy
 import json
 import os
@@ -137,6 +138,24 @@ class CorporateFixture(unittest.TestCase):
 
 
 class CorporateAccountTests(CorporateFixture):
+    def test_corporate_version_floor_before_auth_or_model_request(self):
+        for version, supported in (('2.1.236', False), ('2.1.258', False),
+                                   ('2.1.259', True), ('2.1.278', True)):
+            with self.subTest(version=version), self.synthetic(), patch(
+                'sec_review.auth.execute', side_effect=lambda argv, *args:
+                ProcessResult(0, version if '--version' in argv else
+                              ('{}' if '--help' in argv else json.dumps(self.config['auth'])), '', .01)
+            ) as execute:
+                if supported:
+                    self.assertEqual(auth.prepare_account_claude(self.root).metadata['claude_version'], version)
+                else:
+                    with self.assertRaisesRegex(ReviewError, '2.1.259') as caught:
+                        auth.prepare_account_claude(self.root)
+                    self.assertIn('update', str(caught.exception).lower())
+                calls = [call.args[0] for call in execute.call_args_list]
+                self.assertFalse(any('-p' in call for call in calls))
+                self.assertEqual(any('auth' in call for call in calls), supported)
+
     def test_required_interfaces_exist(self):
         for module, name in ((auth, 'prepare_account_claude'), (ai, 'validate_exact_model'),
                              (ai, 'make_corporate_packet'), (ai, 'run_corporate_ai')):
@@ -215,6 +234,28 @@ class CorporateAccountTests(CorporateFixture):
 
 
 class CorporatePacketTests(CorporateFixture):
+    def test_recognizable_credentials_are_withheld_from_source_packet(self):
+        from sec_review.ai import make_corporate_packet
+        basic = base64.b64encode(b'fixture-user:fixture-password').decode('ascii')
+        forms = (
+            'Authorization: ' + 'Bearer fixture-source-token-123456',
+            'Authorization: ' + 'Basic ' + basic,
+            '{"Authorization": "' + 'Bearer fixture-source-token-123456"}',
+            "{'Authorization': '" + 'Basic ' + basic + "'}",
+            'headers["Authorization"] = "' + 'Bearer fixture-source-token-123456"',
+            'https://' + 'fixture-user:fixture-password@proxy.invalid/path',
+            'ghp_' + 'A' * 24,
+            'api_key="fixture-source-secret-123456"',
+        )
+        for form in forms:
+            with self.subTest(form=form.split(' ', 1)[0]):
+                (self.source / 'app.py').write_text('value = ' + repr(form) + '\n')
+                packet = make_corporate_packet(self.source, self.report, self.policy)
+                self.assertEqual(packet['files'], [])
+                self.assertEqual(packet['omitted'][0]['reason'],
+                                 'credential or private-key material; whole file withheld')
+                self.assertNotIn(form, json.dumps(packet))
+
     def test_model_requires_exact_full_identifier(self):
         self.assertEqual(ai.validate_exact_model(MODEL), MODEL)
         for value in ('sonnet', 'opus', 'haiku', 'default', 'best', 'claude-sonnet',
@@ -666,6 +707,11 @@ class CorporateProtocolTests(CorporateFixture):
             self.assertIn('prompt injection', prompt.lower())
             self.assertIn('CLAUDE.md', prompt)
             self.assertIn('not reproduced', prompt.lower())
+            self.assertIn('current supplied source', prompt.lower())
+            self.assertIn('security impact', prompt.lower())
+            self.assertIn('hypothetical future', prompt.lower())
+            self.assertIn('material precondition', prompt.lower())
+            self.assertIn('unresolved', prompt.lower())
         settings = read_json(ROOT / 'config/claude-settings.json')
         self.assertTrue(settings['disableAllHooks'])
         self.assertEqual(settings['enabledPlugins'], {})

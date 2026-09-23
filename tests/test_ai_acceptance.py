@@ -110,6 +110,12 @@ class FixedEvalFixtureTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Invalid arithmetic expression"):
             load_fixed_eval_fixture().calculate("\ud800")
 
+    def test_calculate_rejects_null_byte_as_invalid_input(self):
+        fixture = load_fixed_eval_fixture()
+        with patch.object(fixture.ast, "parse", side_effect=AssertionError("parser reached")):
+            with self.assertRaisesRegex(ValueError, "Invalid arithmetic expression"):
+                fixture.calculate("1+\x00")
+
     def test_calculate_rejects_nonfinite_float_literal(self):
         with self.assertRaises(ValueError):
             load_fixed_eval_fixture().calculate("1e309")
