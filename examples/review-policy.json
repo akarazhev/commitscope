@@ -1,0 +1,23 @@
+{
+  "schema_version": "1.0",
+  "owner": "Application Security",
+  "scope": {
+    "description": "Authentication and authorization paths",
+    "include": ["**"],
+    "exclude": ["docs/generated/**"]
+  },
+  "threat_model": {
+    "assets": ["customer data"],
+    "attackers": ["authenticated cross-tenant user"],
+    "trust_boundaries": ["HTTP request to application service"]
+  },
+  "invariants": [
+    {"id": "AUTH-001", "statement": "A caller may access only its tenant's data."}
+  ],
+  "fail_threshold": "high",
+  "code_upload": {
+    "allowed": true,
+    "max_files": 80,
+    "max_bytes": 160000
+  }
+}

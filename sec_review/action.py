@@ -8,7 +8,8 @@ import uuid
 
 from . import __version__
 from .cli import main
-from .core import ReviewError, no_symlinks, now, private_dir
+from .core import (ReviewError, active_output_claim, claim_output_dir, mark_output_claim,
+                   no_symlinks, now, output_claim_is_current, verify_output_claim)
 from .reports import save_reports
 
 
@@ -94,12 +95,14 @@ def parse_action_inputs(environ: Mapping[str, str]) -> ActionInputs:
         run_attempt = _required(environ, 'GITHUB_RUN_ATTEMPT')
         _reject_control(run_id, 'run id')
         _reject_control(run_attempt, 'run attempt')
-        out = runner / f'commitscope-{run_id}-{run_attempt}'
+        out = runner / f'commitscope-{run_id}-{run_attempt}-{uuid.uuid4().hex}'
     no_symlinks(out)
     out = out.resolve(strict=False)
     _inside(out, runner, 'out')
     if out == repo or repo in out.parents:
         raise ReviewError('Action reports must be outside the target repository')
+    if raw_out_text and out.exists():
+        raise ReviewError('Action report directory must not already exist')
 
     fail_on = environ.get('INPUT_FAIL_ON') or 'high'
     if fail_on not in _FAIL_ON:
@@ -141,23 +144,34 @@ def scan_argv(inputs: ActionInputs) -> list[str]:
     return argv
 
 
-def write_action_outputs(path: Path, inputs: ActionInputs, code: int) -> None:
-    records = {
-        'report-directory': inputs.out,
-        'report-json': inputs.out / 'report.json',
-        'report-markdown': inputs.out / 'report.md',
-        'report-sarif': inputs.out / 'report.sarif',
-        'exit-code': code,
-    }
+def _current_reports(inputs: ActionInputs, claim) -> bool:
+    reports = tuple(inputs.out / name for name in ('report.json', 'report.md', 'report.sarif'))
+    return output_claim_is_current(claim) and inputs.out.is_dir() and not inputs.out.is_symlink() and all(
+        report.parent == inputs.out and report.is_file() and not report.is_symlink()
+        for report in reports
+    )
+
+
+def write_action_outputs(path: Path, inputs: ActionInputs, code: int, *, claim=None,
+                         reports_ready: bool = True) -> None:
+    records: dict[str, Path | int] = {'exit-code': code}
+    if reports_ready and claim is not None and _current_reports(inputs, claim):
+        records = {
+            'report-directory': inputs.out,
+            'report-json': inputs.out / 'report.json',
+            'report-markdown': inputs.out / 'report.md',
+            'report-sarif': inputs.out / 'report.sarif',
+            **records,
+        }
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open('a', encoding='utf-8') as output:
         for key, value in records.items():
             output.write(f'{key}={value}\n')
 
 
-def save_bootstrap_failure_report(inputs: ActionInputs) -> None:
+def save_bootstrap_failure_report(inputs: ActionInputs, claim) -> None:
     reason = 'GitHub Action scanner bootstrap failed before scan; no target source snapshot was exported.'
-    private_dir(inputs.out, new=True)
+    verify_output_claim(claim)
     report = {
         'schema_version': '2.0',
         'project_version': __version__,
@@ -183,6 +197,7 @@ def save_bootstrap_failure_report(inputs: ActionInputs) -> None:
         'error': reason,
     }
     save_reports(inputs.out, report)
+    mark_output_claim(inputs.out)
 
 
 def run_action(environ: Mapping[str, str], cli_main: Callable[[list[str]], int] = main) -> int:
@@ -190,15 +205,26 @@ def run_action(environ: Mapping[str, str], cli_main: Callable[[list[str]], int] 
         inputs = parse_action_inputs(environ)
     except (ReviewError, OSError, ValueError, KeyError, TypeError):
         return 2
-    if cli_main(['bootstrap']) != 0:
+    try:
+        claim = claim_output_dir(inputs.out)
+    except (ReviewError, OSError, ValueError, KeyError, TypeError):
         try:
-            save_bootstrap_failure_report(inputs)
-            write_action_outputs(inputs.github_output, inputs, 2)
+            write_action_outputs(inputs.github_output, inputs, 2, reports_ready=False)
         except (ReviewError, OSError, ValueError, KeyError, TypeError):
             pass
         return 2
-    code = cli_main(scan_argv(inputs))
+    with active_output_claim(claim):
+        if cli_main(['bootstrap']) != 0:
+            try:
+                save_bootstrap_failure_report(inputs, claim)
+                write_action_outputs(inputs.github_output, inputs, 2, claim=claim)
+            except (ReviewError, OSError, ValueError, KeyError, TypeError):
+                pass
+            return 2
+        code = cli_main(scan_argv(inputs))
     if code not in (0, 1, 2):
         code = 2
-    write_action_outputs(inputs.github_output, inputs, code)
+    if not _current_reports(inputs, claim):
+        code = 2
+    write_action_outputs(inputs.github_output, inputs, code, claim=claim)
     return code

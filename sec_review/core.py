@@ -1,5 +1,7 @@
 """Small, dependency-free primitives. Target content is never executed here."""
 from __future__ import annotations
+from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass
 from datetime import datetime, timezone
 import hashlib
@@ -7,6 +9,7 @@ import json
 import os
 from pathlib import Path, PurePosixPath
 import signal
+import stat
 import subprocess
 import tempfile
 import time
@@ -14,8 +17,21 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 MAX_OUTPUT = 32 * 1024 * 1024
+INTERRUPT_GRACE_SECONDS = 5
+_MANAGED_EXECUTE_ENV = '_COMMITSCOPE_MANAGED_EXECUTE'
 class ReviewError(Exception):
     """A failed prerequisite or incomplete review, not a clean result."""
+
+
+@dataclass
+class OutputClaim:
+    path: Path
+    device: int
+    inode: int
+    reports_written: bool = False
+
+
+_ACTIVE_OUTPUT_CLAIM: ContextVar[OutputClaim | None] = ContextVar('active_output_claim', default=None)
 
 def now() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -56,6 +72,22 @@ def no_symlinks(path: Path) -> None:
     for part in (path, *path.parents):
         if part.is_symlink(): raise ReviewError(f'Refusing symbolic-link path: {part}')
 
+def protected_path_stat(path: Path, *, directory: bool=False, require_owner: bool=True) -> os.stat_result:
+    """Check operator-owned policy files and existing protected directories."""
+    no_symlinks(path)
+    try:
+        state = os.stat(path, follow_symlinks=False)
+    except OSError as e:
+        raise ReviewError(f'Cannot inspect protected path: {path}: {e}') from e
+    expected_type = stat.S_ISDIR if directory else stat.S_ISREG
+    if not expected_type(state.st_mode):
+        raise ReviewError(f'Protected path is not a regular {"directory" if directory else "file"}: {path}')
+    if require_owner and state.st_uid not in (0, os.getuid()):
+        raise ReviewError(f'Protected path must be owned by the current user or root: {path}')
+    if state.st_mode & (stat.S_IWGRP | stat.S_IWOTH):
+        raise ReviewError(f'Protected path must not be group/world writable: {path}')
+    return state
+
 def trusted_internal_temp_path(path: Path) -> Path:
     """Canonicalize only operator/test-created paths that remain inside tempfile's root."""
     try:
@@ -72,13 +104,63 @@ def private_dir(path: Path, *, new: bool=False) -> Path:
     path.chmod(0o700)
     return path
 
+
+def claim_output_dir(path: Path) -> OutputClaim:
+    private_dir(path, new=True)
+    state = path.stat(follow_symlinks=False)
+    claim = OutputClaim(path, state.st_dev, state.st_ino)
+    verify_output_claim(claim)
+    return claim
+
+
+@contextmanager
+def active_output_claim(claim: OutputClaim):
+    token = _ACTIVE_OUTPUT_CLAIM.set(claim)
+    try:
+        yield
+    finally:
+        _ACTIVE_OUTPUT_CLAIM.reset(token)
+
+
+def output_claim_for(path: Path) -> OutputClaim | None:
+    claim = _ACTIVE_OUTPUT_CLAIM.get()
+    return claim if claim is not None and claim.path == path else None
+
+
+def verify_output_claim(claim: OutputClaim) -> None:
+    no_symlinks(claim.path)
+    state = claim.path.stat(follow_symlinks=False)
+    if not stat.S_ISDIR(state.st_mode) or (state.st_dev, state.st_ino) != (claim.device, claim.inode):
+        raise ReviewError(f'Action output directory ownership changed: {claim.path}')
+
+
+def mark_output_claim(path: Path) -> None:
+    claim = output_claim_for(path)
+    if claim is None:
+        raise ReviewError(f'No active output claim for reports: {path}')
+    verify_output_claim(claim)
+    claim.reports_written = True
+
+
+def output_claim_is_current(claim: OutputClaim) -> bool:
+    if not claim.reports_written:
+        return False
+    try:
+        verify_output_claim(claim)
+    except (ReviewError, OSError):
+        return False
+    return True
+
 def write_text(path: Path, text: str) -> None:
+    write_bytes(path, text.encode('utf-8'))
+
+def write_bytes(path: Path, data: bytes) -> None:
     no_symlinks(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     fd,tmp=tempfile.mkstemp(prefix='.write-',dir=path.parent)
     try:
-        with os.fdopen(fd,'w',encoding='utf-8') as f:
-            f.write(text); f.flush(); os.fsync(f.fileno())
+        with os.fdopen(fd,'wb') as f:
+            f.write(data); f.flush(); os.fsync(f.fileno())
         os.replace(tmp,path)
         path.chmod(0o600)
     finally:
@@ -112,18 +194,21 @@ class ProcessResult:
 def execute(argv: list[str], cwd: Path, env: dict[str,str], timeout: float, stdin: str | None=None) -> ProcessResult:
     if timeout<=0: raise ReviewError('Timeout must be positive')
     start=time.monotonic(); timed=False
+    managed_parent = os.environ.get(_MANAGED_EXECUTE_ENV) == str(os.getppid())
+    process_env = dict(env)
+    process_env[_MANAGED_EXECUTE_ENV] = str(os.getpid())
     try:
         with tempfile.TemporaryFile() as out, tempfile.TemporaryFile() as err:
-            p=subprocess.Popen(argv,cwd=cwd,env=env,stdin=subprocess.PIPE if stdin is not None else subprocess.DEVNULL,
+            p=subprocess.Popen(argv,cwd=cwd,env=process_env,stdin=subprocess.PIPE if stdin is not None else subprocess.DEVNULL,
                                stdout=out,stderr=err,start_new_session=(os.name=='posix'),shell=False)
             try: p.communicate(None if stdin is None else stdin.encode(),timeout=timeout)
             except subprocess.TimeoutExpired:
                 timed=True
-                if os.name=='posix':
-                    try: os.killpg(p.pid,signal.SIGKILL)
-                    except ProcessLookupError: pass
-                else: p.kill()
-                p.communicate()
+                if _stop_process(p, allow_cleanup=not managed_parent):
+                    raise KeyboardInterrupt
+            except KeyboardInterrupt:
+                _stop_process(p, allow_cleanup=not managed_parent)
+                raise
             out.seek(0); err.seek(0)
             stdout=out.read(MAX_OUTPUT+1); stderr=err.read(MAX_OUTPUT+1)
             truncated=len(stdout)>MAX_OUTPUT or len(stderr)>MAX_OUTPUT
@@ -131,3 +216,42 @@ def execute(argv: list[str], cwd: Path, env: dict[str,str], timeout: float, stdi
                                  stdout[:MAX_OUTPUT].decode('utf-8','replace'),
                                  stderr[:MAX_OUTPUT].decode('utf-8','replace'),round(time.monotonic()-start,3),timed,truncated)
     except OSError as e: raise ReviewError(f'Cannot start {Path(argv[0]).name}: {e}') from e
+
+
+def _stop_process(process: subprocess.Popen, *, allow_cleanup: bool) -> bool:
+    if os.name != 'posix' or not allow_cleanup:
+        _terminate_process(process)
+        return False
+    try:
+        os.killpg(process.pid, signal.SIGINT)
+    except ProcessLookupError:
+        process.communicate()
+        return False
+    deadline = time.monotonic() + INTERRUPT_GRACE_SECONDS
+    interrupted = False
+    while process.poll() is None:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            _terminate_process(process)
+            return interrupted
+        try:
+            process.communicate(timeout=remaining)
+        except subprocess.TimeoutExpired:
+            _terminate_process(process)
+            return interrupted
+        except KeyboardInterrupt:
+            interrupted = True
+    # The leader can exit on SIGINT while other members ignore it.
+    _terminate_process(process)
+    return interrupted
+
+
+def _terminate_process(process: subprocess.Popen) -> None:
+    if os.name == 'posix':
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+    else:
+        process.kill()
+    process.communicate()

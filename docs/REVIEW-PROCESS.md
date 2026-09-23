@@ -1,59 +1,67 @@
-# Review process for this executable project
+# Corporate Review Process
 
-## Before review
+## Prepare
 
-The service owner approves `config/project-context.md` outside the target application.
-Describe assets, untrusted inputs, trust boundaries, tenants, roles, and business rules.
-Write testable invariants: for example, tenant A must never obtain tenant B's invoice,
-and an authorized request must still work after the fix.
+The service owner approves the policy outside the target repository. Record assets,
+attackers, trust boundaries, scope, and testable security invariants. Confirm the
+languages covered by SAST and the manifests expected in dependency inventory. Missing
+coverage is not a clean result.
 
-Choose a clean commit and, optionally, a base commit. Decide which manifests are
-expected to appear in dependency inventory and which languages need SAST rules. An
-unsupported language or missing lockfile is a coverage gap, not a clean security result.
+Choose a clean committed revision and record its full lowercase commit ID. Choose an
+exact approved Claude model ID and a new protected output directory outside the target.
+The developer confirms source-transfer authority before using `--allow-code-upload`.
 
-## Evidence collection
+## Collect One Atomic Run
 
-Run `scan` and inspect check execution before triaging findings. An incomplete result
-must be investigated even when the findings array is empty. Preserve commit IDs,
-configuration hashes, scanner versions, database timestamps, exact exclusions, and
-private raw reports. Do not edit original evidence to make a review pass.
+Run `commitscope review`, not a hand-assembled `scan` plus `ai` sequence. The command
+binds scope, snapshot, policy, scanner output, Hunter, Verifier, normalized evidence,
+private evidence, and final decision into one manifest. For an audited
+standard-library-only project, record the owner reason with `--allow-empty-sca`; keep
+the default strict for every other target.
 
-Request AI only after approving source transfer and checking secret-scan completion.
-Read omitted-file lists and model limitations. The discovery and verification passes
-produce candidates and counterarguments, not release authorization.
+Preserve the result regardless of whether it is `READY_FOR_HUMAN_REVIEW`,
+`FINDINGS_REQUIRE_TRIAGE`, or `INCOMPLETE`. Do not edit an original report, manifest,
+or model artifact.
 
-## Human triage
+## Protected Handoff
 
-For each important candidate, record the controlled input, attacker privileges,
-reachable call path, violated invariant, existing defenses, realistic impact, and the
-strongest counterargument. Classify the evidence, not the model's rhetorical confidence.
+Give the unchanged run directory to the assigned human reviewer through protected
+storage. The reviewer runs:
 
-Recommended states are `hypothesis`, `source-verified`, `reproduced`, `rejected`, and
-`unresolved`. The tool's `scanner_finding` and `ai_hypothesis` states deliberately do
-not pretend these human decisions have already occurred. Keep rejected/unresolved
-records with their rationale in your protected issue/evidence system.
+```bash
+commitscope verify-review --run /protected/reviews/run-id
+```
 
-## Reproduce and remediate
+Verification checks hashes, file types and permissions, symlink absence, exact commit
+and snapshot identity, policy/resource hashes, stage completion, Hunter/Verifier
+coverage, and decision consistency. The manifest is unsigned; verification does not
+cryptographically prove who created it or that storage was immutable.
 
-Use a separately authorized isolated test environment. `scan` does not run a target's
-tests because test/build scripts can execute arbitrary code. A security engineer or
-your controlled test infrastructure must perform that step.
+The reviewer shares only normalized reports and `evidence/` as permitted by company
+rules. Raw scanner data, source packets, model envelopes, and diagnostics remain under
+`private/` and are confidential.
 
-A reproduction should demonstrate the forbidden behavior before the fix. The regression
-suite should then reject that behavior and retain legitimate behavior afterward. Avoid
-a test that invents the flaw by disabling middleware or replacing real checks with mocks.
+## Human Decision
 
-Prepare a minimal separate fix commit. Run the appropriate functional/security tests,
-then scan again with the same reviewed policy. Use `compare` to organize changes, not
-as proof that a missing finding was fixed. Look for the same defect pattern elsewhere.
+For each material candidate, record the controlled input, attacker privileges,
+reachable path, violated invariant, existing defenses, impact, and strongest
+counterargument. Reproduce findings only in a separately authorized isolated
+environment; CommitScope deliberately does not build or execute the target.
 
-## Release and learning
+After `verify-review`, complete a copy of `reviewer-decision-template.json` in the
+protected decision system, including the verified manifest hash. Keep the original
+template unchanged because it is itself covered by the manifest. Human identity,
+approval, exceptions, and risk acceptance remain external controls.
 
-Keep the existing code-owner and AppSec approvals. Do not treat exit 0 as an authenticated
-approval. Explicitly document unresolved serious candidates, time-bounded accepted risks,
-coverage gaps, and owners. Preserve regression tests or scanner rules after the session.
+READY_FOR_HUMAN_REVIEW does not approve a merge or assert that the application is secure.
 
-Start in an advisory pilot. Measure useful findings, false positives, misses on known
-cases, analyst time, latency, and costs. Re-evaluate after changing models, rules,
-scanners, databases, or workflow permissions. Do not deploy an automatic release block
-solely because the toolkit's own unit tests pass.
+## Fix And Recheck
+
+Prepare a minimal fix commit, run controlled functional and security tests, and review
+the full new commit. Every recheck uses a new output directory and repeats scanners,
+Hunter, Verifier, manifest creation, `verify-review`, and human triage. Never overwrite
+or carry forward an old decision. `compare` may organize scanner changes, but a missing
+finding is not proof of remediation.
+
+CI scanner reports can guide prioritization before the local run. They remain partial
+inputs and never replace local AI or the protected human handoff.

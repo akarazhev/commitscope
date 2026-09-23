@@ -4,7 +4,7 @@ from pathlib import Path
 import shutil
 import uuid
 from . import __version__
-from .core import ReviewError, now, private_dir, file_hash, no_symlinks
+from .core import ReviewError, now, private_dir, file_hash, no_symlinks, mark_output_claim, output_claim_for, verify_output_claim
 from .paths import current_resource_root, current_tools_root
 from .snapshot import export_snapshot
 from .tools import inspect_tools, tool_paths, lock
@@ -14,7 +14,7 @@ from .reports import save_reports
 
 def run_scan(repo: Path, out: Path, *, ref: str='HEAD', base: str | None=None,
              tools_root: Path | None = None, resources: Path | None = None, timeout: int=360, offline: bool=False,
-             allow_empty_sca: str='', fail_on: str='high') -> dict:
+             allow_empty_sca: str='', fail_on: str='high', defer_reports: bool=False) -> dict:
     repo=repo.resolve(); out=out.absolute()
     no_symlinks(out)
     out=out.resolve(strict=False)
@@ -22,7 +22,11 @@ def run_scan(repo: Path, out: Path, *, ref: str='HEAD', base: str | None=None,
     resources = resources or current_resource_root()
     if out==repo or repo in out.parents:
         raise ReviewError('Reports must be outside the target repository. Keep this review project separate from your application.')
-    private_dir(out,new=True)
+    claim = output_claim_for(out)
+    if claim is None:
+        private_dir(out,new=True)
+    else:
+        verify_output_claim(claim)
     report={'schema_version':'2.0','project_version':__version__,'run_id':str(uuid.uuid4()),
             'started_at':now(),'finished_at':None,'fail_on':fail_on,
             'snapshot':{'repo':str(repo),'head':ref,'scope':'not exported','excluded':[],'inline_iac_suppressions':[]},
@@ -43,6 +47,9 @@ def run_scan(repo: Path, out: Path, *, ref: str='HEAD', base: str | None=None,
             report['scanners']=[{'name':name,'status':'not_run','reason':str(e)} for name in ('semgrep','gitleaks','trivy-vuln','trivy-iac')]
     finally:
         report['finished_at']=now()
-        save_reports(out,report)
+        if not defer_reports:
+            save_reports(out,report)
+        if claim is not None and not defer_reports:
+            mark_output_claim(out)
         shutil.rmtree(work,ignore_errors=True)
     return report

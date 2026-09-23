@@ -1,1 +1,1 @@
-{"disableAllHooks":true,"permissions":{"deny":["Bash","Edit","Write","WebFetch","WebSearch","mcp__*"]}}
+{"disableAllHooks":true,"enabledPlugins":{},"permissions":{"deny":["mcp__*"]}}

@@ -3,12 +3,14 @@ import json
 import sys
 import tempfile
 import unittest
+import uuid
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from sec_review.action import parse_action_inputs, run_action, scan_argv
 from sec_review.cli import parser as cli_parser
-from sec_review.core import ReviewError
+from sec_review.core import ReviewError, mark_output_claim
 
 
 class ActionTests(unittest.TestCase):
@@ -33,6 +35,80 @@ class ActionTests(unittest.TestCase):
             values = parse_action_inputs(self.environment(base))
             self.assertNotIn(values.repo, values.out.parents)
             self.assertTrue(values.out.is_relative_to(base / 'runner'))
+
+    def test_repeated_default_invocations_get_distinct_owned_directories(self):
+        with tempfile.TemporaryDirectory() as directory:
+            env = self.environment(Path(directory).resolve())
+            created = []
+
+            def fake_main(argv):
+                if argv == ['bootstrap']:
+                    return 0
+                out = Path(argv[argv.index('--out') + 1])
+                out.mkdir(exist_ok=True)
+                for name in ('report.json', 'report.md', 'report.sarif'):
+                    (out / name).write_text(name)
+                mark_output_claim(out)
+                created.append(out)
+                return 0
+
+            with patch('sec_review.action.uuid.uuid4', side_effect=(
+                uuid.UUID('00000000-0000-0000-0000-000000000001'),
+                uuid.UUID('00000000-0000-0000-0000-000000000002'),
+            )):
+                self.assertEqual(run_action(env, fake_main), 0)
+                self.assertEqual(run_action(env, fake_main), 0)
+
+            self.assertEqual(len(created), 2)
+            self.assertNotEqual(created[0], created[1])
+            self.assertTrue(all(path.is_dir() for path in created))
+
+    def test_stale_default_directory_never_becomes_current_report_output(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            env = self.environment(base)
+            env['GITHUB_OUTPUT'] = str(base / 'second-outputs')
+            stale = base / 'runner' / 'commitscope-41-2-00000000000000000000000000000002'
+            stale.mkdir()
+            for name in ('report.json', 'report.md', 'report.sarif'):
+                (stale / name).write_text('stale PASS')
+
+            with patch('sec_review.action.uuid.uuid4', return_value=uuid.UUID(
+                    '00000000-0000-0000-0000-000000000002')):
+                self.assertEqual(run_action(env, lambda argv: 0), 2)
+
+            self.assertEqual(Path(env['GITHUB_OUTPUT']).read_text(), 'exit-code=2\n')
+
+    def test_racing_stale_reports_are_never_published(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            env = self.environment(base)
+
+            def fake_main(argv):
+                if argv == ['bootstrap']:
+                    return 0
+                out = Path(argv[argv.index('--out') + 1])
+                try:
+                    out.mkdir()
+                except FileExistsError:
+                    return 2
+                for name in ('report.json', 'report.md', 'report.sarif'):
+                    (out / name).write_text('stale PASS')
+                return 2
+
+            self.assertEqual(run_action(env, fake_main), 2)
+            self.assertEqual(Path(env['GITHUB_OUTPUT']).read_text(), 'exit-code=2\n')
+
+    def test_existing_explicit_output_is_rejected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            env = self.environment(base)
+            explicit = base / 'runner' / 'existing'
+            explicit.mkdir()
+            env['INPUT_OUT'] = str(explicit)
+
+            with self.assertRaises(ReviewError):
+                parse_action_inputs(env)
 
     def test_runner_temp_subject_repo_is_allowed_for_live_consumer_ci(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -92,7 +168,14 @@ class ActionTests(unittest.TestCase):
             env = self.environment(Path(directory).resolve()); calls = []
             def fake_main(argv):
                 calls.append(argv)
-                return 0 if argv == ['bootstrap'] else 1
+                if argv == ['bootstrap']:
+                    return 0
+                out = Path(argv[argv.index('--out') + 1])
+                out.mkdir(exist_ok=True)
+                for name in ('report.json', 'report.md', 'report.sarif'):
+                    (out / name).write_text(name)
+                mark_output_claim(out)
+                return 1
             self.assertEqual(run_action(env, fake_main), 1)
             output = Path(env['GITHUB_OUTPUT']).read_text()
             self.assertIn('exit-code=1\n', output)
@@ -116,35 +199,89 @@ class ActionTests(unittest.TestCase):
                 return 1
             self.assertEqual(run_action(env, fake_main), 2)
             self.assertEqual(calls, [['bootstrap']])
-            values = parse_action_inputs(env)
             output = Path(env['GITHUB_OUTPUT']).read_text()
+            report_json = Path(next(
+                line.split('=', 1)[1]
+                for line in output.splitlines()
+                if line.startswith('report-json=')
+            ))
             self.assertIn('report-directory=', output)
             self.assertIn('report-json=', output)
             self.assertIn('report-markdown=', output)
             self.assertIn('report-sarif=', output)
             self.assertIn('exit-code=2\n', output)
-            self.assertTrue((values.out / 'report.json').is_file())
-            self.assertTrue((values.out / 'report.md').is_file())
-            self.assertTrue((values.out / 'report.sarif').is_file())
-            report = json.loads((values.out / 'report.json').read_text())
+            self.assertTrue(report_json.is_file())
+            self.assertTrue((report_json.parent / 'report.md').is_file())
+            self.assertTrue((report_json.parent / 'report.sarif').is_file())
+            report = json.loads(report_json.read_text())
             self.assertEqual(report['decision']['exit_code'], 2)
             self.assertEqual(report['ai']['status'], 'not_requested')
             self.assertEqual({scanner['name'] for scanner in report['scanners']},
                              {'semgrep', 'gitleaks', 'trivy-vuln', 'trivy-iac'})
             self.assertTrue(all(scanner['status'] == 'not_run' for scanner in report['scanners']))
 
-    def test_incomplete_scan_status_writes_outputs_and_returns_two(self):
+    def test_incomplete_scan_status_emits_only_exit_code(self):
         with tempfile.TemporaryDirectory() as directory:
             env = self.environment(Path(directory).resolve())
             def fake_main(argv):
                 return 0 if argv == ['bootstrap'] else 2
             self.assertEqual(run_action(env, fake_main), 2)
             output = Path(env['GITHUB_OUTPUT']).read_text()
-            self.assertIn('report-directory=', output)
-            self.assertIn('report-json=', output)
-            self.assertIn('report-markdown=', output)
-            self.assertIn('report-sarif=', output)
-            self.assertIn('exit-code=2\n', output)
+            self.assertEqual(output, 'exit-code=2\n')
+
+    def test_symlinked_scan_report_is_not_published(self):
+        with tempfile.TemporaryDirectory() as directory:
+            env = self.environment(Path(directory).resolve())
+
+            def fake_main(argv):
+                if argv == ['bootstrap']:
+                    return 0
+                out = Path(argv[argv.index('--out') + 1])
+                out.mkdir(exist_ok=True)
+                (out / 'report.json').write_text('{}')
+                (out / 'report.md').write_text('report')
+                target = out / 'stale.sarif'
+                target.write_text('{}')
+                (out / 'report.sarif').symlink_to(target)
+                return 0
+
+            self.assertEqual(run_action(env, fake_main), 2)
+            self.assertEqual(Path(env['GITHUB_OUTPUT']).read_text(), 'exit-code=2\n')
+
+    def test_symlinked_report_directory_is_not_published(self):
+        with tempfile.TemporaryDirectory() as directory:
+            env = self.environment(Path(directory).resolve())
+
+            def fake_main(argv):
+                if argv == ['bootstrap']:
+                    return 0
+                out = Path(argv[argv.index('--out') + 1])
+                alternate = out.parent / 'alternate'
+                alternate.mkdir()
+                for name in ('report.json', 'report.md', 'report.sarif'):
+                    (alternate / name).write_text(name)
+                out.rmdir()
+                out.symlink_to(alternate, target_is_directory=True)
+                return 0
+
+            self.assertEqual(run_action(env, fake_main), 2)
+            self.assertEqual(Path(env['GITHUB_OUTPUT']).read_text(), 'exit-code=2\n')
+
+    def test_consumer_artifacts_upload_only_normalized_report_outputs(self):
+        workflows = {
+            ROOT / 'docs/examples/commitscope.yml': '      - name: Upload SARIF',
+            ROOT / '.github/workflows/verify.yml': '  live-scanners:',
+        }
+        reports = (
+            '${{ steps.commitscope.outputs.report-json }}',
+            '${{ steps.commitscope.outputs.report-markdown }}',
+            '${{ steps.commitscope.outputs.report-sarif }}',
+        )
+        for workflow, end_marker in workflows.items():
+            with self.subTest(workflow=workflow):
+                artifact = workflow.read_text().split('uses: actions/upload-artifact', 1)[1].split(end_marker, 1)[0]
+                self.assertNotIn('report-directory', artifact)
+                self.assertEqual(sum(artifact.count(report) for report in reports), 3)
 
     def test_relative_output_escape_and_symlink_parent_are_rejected(self):
         with tempfile.TemporaryDirectory() as directory:

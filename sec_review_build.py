@@ -10,8 +10,9 @@ import csv
 import gzip
 import hashlib
 import io
+import json
 import os
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import re
 import shutil
 import subprocess
@@ -38,8 +39,10 @@ EXCLUDED_SOURCE_PARTS = {
     "__pycache__",
     "build",
     "dist",
+    "reports",
 }
 EXCLUDED_SUFFIXES = {".pyc", ".pyo"}
+SOURCE_MANIFEST = "config/sdist-manifest.json"
 
 
 def get_requires_for_build_wheel(config_settings: dict | None = None) -> list[str]:
@@ -220,10 +223,64 @@ def _wheel_payload_files() -> list[tuple[Path, str]]:
 
 def _source_files() -> list[Path]:
     tracked = _git_ls_files()
-    explicit = ["sec_review_build.py", "scripts/build_dist.py"]
-    files = {ROOT / item for item in tracked} if tracked else set(_walk_files(ROOT))
-    files.update(ROOT / item for item in explicit if (ROOT / item).is_file())
+    files = {ROOT / item for item in tracked} if tracked else set(_manifest_source_files())
     return sorted(path for path in files if _include_source(path))
+
+
+def _manifest_source_files() -> list[Path]:
+    manifest_path = ROOT / SOURCE_MANIFEST
+    try:
+        value = json.loads(
+            _read_build_text(manifest_path),
+            object_pairs_hook=_unique_json_object,
+            parse_constant=_reject_json_constant,
+        )
+    except (ValueError, TypeError, RecursionError) as error:
+        raise RuntimeError(f"Invalid source manifest: {error}") from error
+    if not isinstance(value, dict) or set(value) != {"schema_version", "files"}:
+        raise RuntimeError("Invalid source manifest keys")
+    if value["schema_version"] != "1.0" or not isinstance(value["files"], list):
+        raise RuntimeError("Invalid source manifest schema")
+
+    seen: set[str] = set()
+    files: list[Path] = []
+    for item in value["files"]:
+        relative = _safe_source_path(item)
+        if relative in seen:
+            raise RuntimeError(f"Duplicate source manifest path: {relative}")
+        seen.add(relative)
+        path = ROOT / relative
+        _validate_build_input(path)
+        files.append(path)
+    return files
+
+
+def _unique_json_object(items: list[tuple[str, object]]) -> dict[str, object]:
+    value: dict[str, object] = {}
+    for key, item in items:
+        if key in value:
+            raise ValueError(f"duplicate JSON key: {key}")
+        value[key] = item
+    return value
+
+
+def _reject_json_constant(value: str) -> None:
+    raise ValueError(f"invalid JSON constant: {value}")
+
+
+def _safe_source_path(value: object) -> str:
+    if (
+        not isinstance(value, str)
+        or not value
+        or any(ord(character) < 32 or ord(character) == 127 for character in value)
+    ):
+        raise RuntimeError("Invalid source manifest path")
+    if "\\" in value or ":" in value or value.startswith("/"):
+        raise RuntimeError(f"Unsafe source manifest path: {value!r}")
+    path = PurePosixPath(value)
+    if any(part in ("", ".", "..") for part in value.split("/")):
+        raise RuntimeError(f"Unsafe source manifest path: {value!r}")
+    return path.as_posix()
 
 
 def _tracked_or_walked_files(root: Path) -> list[Path]:
@@ -264,6 +321,12 @@ def _include_source(path: Path) -> bool:
     if path.suffix in EXCLUDED_SUFFIXES:
         return False
     if any(part in EXCLUDED_SOURCE_PARTS for part in relative.parts):
+        return False
+    if path.name.startswith(".env"):
+        return False
+    if any(part.casefold().startswith("credentials") for part in relative.parts):
+        return False
+    if path.suffix == ".tmp" or "raw" in relative.parts or ".raw." in path.name:
         return False
     _validate_build_input(path)
     return True

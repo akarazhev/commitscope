@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "status", "run_id", "commit_sha", "manifest_sha256", "reviewer", "decided_at", "reason"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "status": {"enum": ["PENDING", "APPROVED", "REJECTED"]},
+    "run_id": {"type": "string", "minLength": 1},
+    "commit_sha": {"type": "string", "pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64})$"},
+    "manifest_sha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+    "reviewer": {"type": ["string", "null"], "minLength": 1},
+    "decided_at": {"type": ["string", "null"], "format": "date-time"},
+    "reason": {"type": ["string", "null"], "minLength": 1}
+  },
+  "allOf": [{
+    "if": {"properties": {"status": {"enum": ["APPROVED", "REJECTED"]}}},
+    "then": {"properties": {
+      "manifest_sha256": {"type": "string"}, "reviewer": {"type": "string"},
+      "decided_at": {"type": "string"}, "reason": {"type": "string"}
+    }},
+    "else": {"properties": {"manifest_sha256": {"type": "null"}}}
+  }]
+}

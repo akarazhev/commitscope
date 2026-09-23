@@ -24,9 +24,10 @@ jobs:
           lfs: false
           fetch-depth: 1
 
+      # Replace REVIEWED_COMMITSCOPE_2_4_COMMIT_SHA with the reviewed full 40-character CommitScope 2.4 commit SHA before enabling this workflow.
       - name: Run CommitScope
         id: commitscope
-        uses: akarazhev/commitscope@v2.3.0
+        uses: akarazhev/commitscope@REVIEWED_COMMITSCOPE_2_4_COMMIT_SHA
         with:
           repo: ${{ github.workspace }}
           ref: ${{ github.sha }}
@@ -39,7 +40,10 @@ jobs:
           name: commitscope-${{ github.run_id }}
           retention-days: 7
           if-no-files-found: warn
-          path: ${{ steps.commitscope.outputs.report-directory }}
+          path: |
+            ${{ steps.commitscope.outputs.report-json }}
+            ${{ steps.commitscope.outputs.report-markdown }}
+            ${{ steps.commitscope.outputs.report-sarif }}
 
       - name: Upload SARIF to GitHub Code Scanning
         if: always()

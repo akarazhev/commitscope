@@ -1,0 +1,32 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["summary", "findings", "limitations"],
+  "properties": {
+    "summary": {"type": "string"},
+    "limitations": {"type": "array", "items": {"type": "string"}},
+    "findings": {
+      "type": "array", "maxItems": 30,
+      "$comment": "Runtime validation requires unique IDs, supplied paths and in-range source lines.",
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["id", "severity", "path", "line", "title", "attacker_control", "trace", "impact", "evidence", "counterarguments", "reproduction_plan"],
+        "properties": {
+          "id": {"type": "string", "pattern": "^AI-[0-9]{3}$"},
+          "severity": {"type": "string", "enum": ["critical", "high", "medium", "low", "unknown"]},
+          "path": {"$ref": "#/definitions/nonempty"},
+          "line": {"type": "integer", "minimum": 1},
+          "title": {"$ref": "#/definitions/nonempty"},
+          "attacker_control": {"$ref": "#/definitions/nonempty"},
+          "trace": {"$ref": "#/definitions/nonempty"},
+          "impact": {"$ref": "#/definitions/nonempty"},
+          "evidence": {"$ref": "#/definitions/nonempty"},
+          "counterarguments": {"$ref": "#/definitions/nonempty"},
+          "reproduction_plan": {"$ref": "#/definitions/nonempty"}
+        }
+      }
+    }
+  },
+  "definitions": {"nonempty": {"type": "string", "minLength": 1, "pattern": "\\S"}}
+}

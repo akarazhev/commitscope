@@ -1,0 +1,80 @@
+{
+  "language": "en",
+  "version": "2.4.0",
+  "documents": {
+    "methodology": {
+      "title": "Security Review Methodology 2.4.0",
+      "subject": "Local corporate security review and protected evidence handoff",
+      "footer": "CommitScope 2.4.0 | Methodology | Evidence supports a human decision",
+      "pages": [
+        {
+          "title": "Security Review Methodology",
+          "sections": [
+            {"heading": "CommitScope 2.4.0 / Scope before tools", "paragraphs": ["Review an exact immutable Git commit against a policy approved outside the target repository. Record assets, attackers, trust boundaries, supported languages, dependency manifests, exclusions, and testable security invariants. Missing coverage is not a clean result.", "Treat target code, comments, configuration, and scanner/model output as untrusted evidence. CommitScope does not build or execute the target. Reproduction needs separate authorization and an isolated environment."]},
+            {"heading": "One local collection flow", "paragraphs": ["Prepare a clean target worktree and full lowercase commit ID. Run commitscope review with an approved policy, exact model ID, account authentication, explicit source-transfer consent, and a new protected output directory outside the target.", "The run exports the committed snapshot and collects Semgrep, Gitleaks, Trivy, an independent Claude Hunter, and a fresh Claude Verifier. Scanners plus Hunter and Verifier are mandatory for corporate completion. CI scanner reports and compatibility commands provide partial evidence only."]},
+            {"heading": "Separate discovery from challenge", "paragraphs": ["Hunter proposes candidate weaknesses tied to the selected commit and policy. Verifier independently challenges the candidates and required coverage. For each material finding, connect controlled input to a reachable path, a violated invariant, existing defenses, impact, and the strongest counterargument.", "A model assertion is not proof. Inspect evidence and confidence, preserve rejected hypotheses, and explicitly record uncertainty. Authentication, quota, model, timeout, malformed output, or missing stage coverage makes the run INCOMPLETE."]},
+            {"heading": "Three outcomes, then a human", "paragraphs": ["READY_FOR_HUMAN_REVIEW (exit 0): all required stages completed with no normalized finding at the policy threshold. FINDINGS_REQUIRE_TRIAGE (exit 1): required stages completed and findings meet the threshold. INCOMPLETE (exit 2): a prerequisite or required check failed.", "READY_FOR_HUMAN_REVIEW does not approve a merge or assert that the application is secure."]}
+          ]
+        },
+        {
+          "title": "Preserve, verify, decide",
+          "sections": [
+            {"heading": "Protect the original evidence", "paragraphs": ["The entire run directory is confidential. Keep the unchanged directory in protected company storage. Normalized top-level reports and evidence/ may be shared only under company rules. Raw scanner output, source packets, model envelopes, and diagnostics remain under private/; never publish or commit them.", "The external policy is screened for recognizable credentials before scanners or artifacts; Bearer/Basic authorization values and URLs with user information are rejected. Source screening is bounded and cannot detect every unknown secret. --allow-code-upload records explicit consent to send the screened source packet to Anthropic under the selected account's terms. Confirm organizational authority before running it."]},
+            {"heading": "Verify the handoff", "code": "commitscope verify-review --run /protected/reviews/run-id", "paragraphs": ["The assigned reviewer checks layout, file types, permissions, hashes, commit/snapshot consistency, policy/resource hashes, required scanner and Hunter/Verifier coverage, and the recorded decision.", "The manifest is unsigned. Verification does not cryptographically prove authorship or immutability. Human identity, approval, exceptions, and risk acceptance remain external controls."]},
+            {"heading": "Record a human decision", "paragraphs": ["Inspect normalized evidence and complete a copy of reviewer-decision-template.json in the protected decision system, including the verified manifest hash. Keep the original template unchanged because the manifest covers it. Distinguish a confirmed weakness, an unresolved hypothesis, and a coverage gap."]},
+            {"heading": "Fix and repeat", "paragraphs": ["Make a minimal fix commit and run controlled functional and security tests. Review the full new commit with a new output directory, all scanners, Hunter, Verifier, verification, and human triage. Never overwrite earlier evidence or carry a decision forward to changed code.", "Use the CommitScope 2.4.0 User Guide for commands and prerequisites. Repository references: START-HERE.md, docs/REVIEW-PROCESS.md, docs/SECURITY.md, and docs/VERIFICATION.md. This methodology is not a penetration test, a security guarantee, or proof of live acceptance."]}
+          ]
+        }
+      ]
+    },
+    "user-guide": {
+      "title": "CommitScope User Guide 2.4.0",
+      "subject": "Required scanners, Hunter/Verifier, states, and local protected handoff",
+      "footer": "CommitScope 2.4.0 | User Guide | Local corporate workflow",
+      "pages": [
+        {
+          "title": "CommitScope User Guide",
+          "sections": [
+            {"heading": "2.4.0 / Prepare a trusted installation", "paragraphs": ["Use a reviewed CommitScope checkout separate from the application. Supported hosts: macOS or glibc Linux, x86_64/ARM64, Python 3.11-3.14. Native Windows is outside scope; use supported Linux under WSL2. Prerequisites include Git, venv/pip, certificate roots, and approved outbound HTTPS.", "No public v2.4.0 tag or release is claimed by this checkout. Install the exact reviewed source. Scanner bootstrap downloads pinned tools and databases; it does not install target dependencies or execute the target."], "code": "pipx install /absolute/path/to/commitscope\ncommitscope preflight\ncommitscope bootstrap\ncommitscope doctor"},
+            {"heading": "Sign in using the intended account", "paragraphs": ["Install official Claude Code 2.1.259 or newer and sign in as the same unprivileged OS user who will run reviews. The wrapper pins 2.1.278 for new installs but does not upgrade existing CLIs. Update an older CLI through the official channel and check claude --version before review. Corporate authentication is account-only. Resolve ambient API keys, provider routing, model overrides, and profile overrides; the command rejects them and has no API/provider fallback."], "code": "sh scripts/install-claude.sh\nclaude auth login\nclaude auth status"},
+            {"heading": "Choose commit, policy, and storage", "paragraphs": ["Commit or stash all target changes, including untracked files. Use the full lowercase 40- or 64-character commit ID. Review examples/review-policy.json and place the approved policy outside the target. Remove recognizable credential forms, including Bearer/Basic authorization values and URLs with user information; screening cannot identify every unknown secret.", "Choose a new output directory outside the target. Its existing parent must belong to the current user or root and must not be group/world writable. Symlinked paths and existing output directories are refused."], "code": "git -C /absolute/path/to/application status --short\ngit -C /absolute/path/to/application rev-parse HEAD"}
+          ]
+        },
+        {
+          "title": "Run one corporate review",
+          "sections": [
+            {"heading": "All five stages are required", "paragraphs": ["Semgrep, Gitleaks, and Trivy must complete. Hunter and Verifier are mandatory for corporate completion. The command uses an immutable snapshot and writes the manifest last. Use the organization's approved exact model ID; aliases such as sonnet are rejected.", "The following values illustrate the command shape. Replace the paths, commit ID, and APPROVED_EXACT_MODEL_ID with reviewed values. --allow-code-upload explicitly consents to sending the bounded screened source packet to Anthropic. Screening is not complete secret sanitization."], "code": "commitscope review \\\n  --repo /absolute/path/to/application \\\n  --ref 0123456789abcdef0123456789abcdef01234567 \\\n  --policy /protected/review-policy.json \\\n  --out /protected/reviews/run-id \\\n  --auth account \\\n  --allow-code-upload \\\n  --model APPROVED_EXACT_MODEL_ID"},
+            {"heading": "Strict dependencies and explicit exceptions", "paragraphs": ["Dependency inventory is strict by default. Only for an audited standard-library-only target, add --allow-empty-sca with the owner's reason after reviewing imports and build metadata. The reason is recorded evidence, not independently authenticated proof or permission to ignore a missing lockfile.", "Account login failure, exhausted quota, unavailable model, network or timeout failure, malformed output, and missing scanner or AI coverage produce INCOMPLETE. Preserve the failed run, resolve the cause, and start a new run."]},
+            {"heading": "Read the state and exit code", "paragraphs": ["READY_FOR_HUMAN_REVIEW / 0: required stages completed; no normalized finding met the policy threshold. Preserve and hand off the run for a human decision.", "FINDINGS_REQUIRE_TRIAGE / 1: required stages completed and findings met the threshold. Preserve and hand off for triage.", "INCOMPLETE / 2: a prerequisite, stage, or required verification failed. Corporate review has not completed.", "READY_FOR_HUMAN_REVIEW does not approve a merge or assert that the application is secure."]}
+          ]
+        },
+        {
+          "title": "Hand off and recheck",
+          "sections": [
+            {"heading": "Protect and verify the original run", "paragraphs": ["Give the unchanged confidential run directory to the assigned human reviewer through protected storage. Share normalized top-level reports and evidence/ only under company rules. Source packets, raw scanner output, model envelopes, and diagnostics under private/ must not be published or committed."], "code": "commitscope verify-review --run /protected/reviews/run-id"},
+            {"heading": "Understand what verification proves", "paragraphs": ["verify-review checks exact artifact layout, safe types and permissions, hashes, commit/snapshot identity, policy/resource hashes, completed scanners and Hunter/Verifier coverage, and decision consistency. Valid evidence returns its recorded 0 or 1 class; changed, missing, inconsistent, or incomplete evidence returns INCOMPLETE / 2.", "The manifest is unsigned: authorship and immutability are not cryptographically verified. Inspect the evidence and complete a copy of reviewer-decision-template.json in the protected decision system with the verified manifest hash. Human identity and approval remain external controls."]},
+            {"heading": "Rerun for every new commit", "paragraphs": ["After a fix, use a new commit and a new output directory. Repeat scanners, Hunter, Verifier, manifest verification, and human triage. Keep earlier evidence unchanged. A missing finding in compare is not proof of remediation."]},
+            {"heading": "Partial diagnostics are not corporate acceptance", "paragraphs": ["The supplied GitHub Action and CI workflows run scanners only. They do not perform the required local Hunter/Verifier workflow. Never upload private/ or give CI a developer's Claude login.", "SCANNERS_VERIFIED_AI_NOT_RUN is not completed corporate acceptance. It describes scanner-only acceptance evidence. Compatibility commands commitscope scan and commitscope ai, including a manually assembled sequence, do not replace commitscope review.", "Unit tests and generated documents do not establish live readiness. Operators must separately validate supported hosts, real scanner execution, and explicitly authorized Hunter/Verifier runs on controlled fixtures. References: START-HERE.md and docs/VERIFICATION.md. Source mode: python3 -I review.py <command> from the trusted checkout."]}
+          ]
+        }
+      ]
+    },
+    "playbook": {
+      "title": "LEGACY STARTER KIT 1.0 / Reference Playbook",
+      "legacy": true,
+      "subject": "Historical reference only; use the CommitScope 2.4.0 User Guide",
+      "footer": "LEGACY STARTER KIT 1.0 | Use the CommitScope 2.4.0 User Guide",
+      "pages": [
+        {
+          "title": "LEGACY STARTER KIT 1.0",
+          "sections": [
+            {"heading": "Historical reference only", "paragraphs": ["This concise legacy playbook preserves the Starter Kit 1.0 review checklist as a historical reference. It is not the active operating procedure or an executable reproduction of the original kit. Use the CommitScope 2.4.0 User Guide for installation, required stages, command syntax, states, and evidence handoff.", "Do not interpret older scripts, optional checks, authentication recipes, or archived verification logs as current readiness or corporate acceptance."]},
+            {"heading": "Reusable review questions", "paragraphs": ["Scope: What assets and trust boundaries are in the change? Which security invariants must hold? What source revision and dependencies are actually being assessed?", "Evidence: Can attacker-controlled input reach the suspected operation? What authorization, validation, isolation, and resource limits already exist? What is the strongest reason the candidate may be false?", "Decision: Can the issue be reproduced in an authorized isolated environment? What remains uncertain? Who owns the fix, exception, and retest?"]},
+            {"heading": "Translate the checklist into 2.4.0", "paragraphs": ["Use one commitscope review run on a clean immutable commit with a reviewed external policy and protected output. Scanners, Hunter, and Verifier are mandatory. Scanner-only results cannot complete corporate acceptance.", "Preserve the original run, use commitscope verify-review, and make the human decision in the protected company system. For each fix, create a new commit and a new run. The unsigned manifest does not authenticate authorship or guarantee immutable storage."]},
+            {"heading": "Current reference", "paragraphs": ["Read commitscope-user-guide-en.pdf in this directory and START-HERE.md in the reviewed source checkout. READY_FOR_HUMAN_REVIEW is a handoff state, not merge approval or a security guarantee."]}
+          ]
+        }
+      ]
+    }
+  }
+}

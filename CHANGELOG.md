@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.4.0 - 2026-09-22
+
+- Add the consent-gated local corporate `review` workflow with independent Claude
+  Hunter and Verifier stages, strict account authentication, and protected evidence.
+- Add three synthetic vulnerable/fixed AI acceptance pairs for IDOR, untrusted
+  evaluation, and shell-command injection. Live execution remains explicitly gated.
+- Add deterministic release builds, clean wheel/sdist/source checks, and an
+  exact-commit installation gate without claiming a pre-release `v2.4.0` tag.
+
 ## 2.3.0 — 2026-09-22
 
 Installable CLI and composite GitHub Action release.

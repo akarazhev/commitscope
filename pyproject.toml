@@ -43,18 +43,47 @@ version = {attr = "sec_review.__version__"}
 "share/commitscope/config" = [
   "config/claude-settings.json",
   "config/claude.version",
+  "config/corporate-hunter.schema.json",
+  "config/corporate-verifier.schema.json",
   "config/empty-mcp.json",
   "config/gitleaks.toml",
   "config/hunter.schema.json",
   "config/project-context.md",
+  "config/resource-manifest.json",
+  "config/review-policy.schema.json",
+  "config/reviewer-decision.schema.json",
+  "config/sdist-manifest.json",
   "config/semgrep.yaml",
   "config/tools.lock.json",
   "config/trivy.yaml",
   "config/verifier.schema.json",
 ]
 "share/commitscope/prompts" = [
+  "prompts/corporate-hunter.md",
+  "prompts/corporate-verifier.md",
   "prompts/hunter.md",
   "prompts/verifier.md",
+]
+"share/commitscope/examples" = [
+  "examples/review-policy.json",
+]
+"share/commitscope/examples/ai-acceptance/eval/fixed" = [
+  "examples/ai-acceptance/eval/fixed/app.py",
+]
+"share/commitscope/examples/ai-acceptance/eval/vulnerable" = [
+  "examples/ai-acceptance/eval/vulnerable/app.py",
+]
+"share/commitscope/examples/ai-acceptance/idor/fixed" = [
+  "examples/ai-acceptance/idor/fixed/app.py",
+]
+"share/commitscope/examples/ai-acceptance/idor/vulnerable" = [
+  "examples/ai-acceptance/idor/vulnerable/app.py",
+]
+"share/commitscope/examples/ai-acceptance/shell/fixed" = [
+  "examples/ai-acceptance/shell/fixed/app.py",
+]
+"share/commitscope/examples/ai-acceptance/shell/vulnerable" = [
+  "examples/ai-acceptance/shell/vulnerable/app.py",
 ]
 "share/commitscope/examples/fixed" = [
   "examples/fixed/Dockerfile",
@@ -64,9 +93,13 @@ version = {attr = "sec_review.__version__"}
 "share/commitscope/examples/vulnerable" = [
   "examples/vulnerable/Dockerfile",
   "examples/vulnerable/app.py",
-  "examples/vulnerable/credentials.txt",
   "examples/vulnerable/requirements.txt",
+  "examples/vulnerable/synthetic-token-fixture.txt",
+]
+"share/commitscope/scripts" = [
+  "scripts/ai_acceptance.py",
 ]
 "share/commitscope/tests" = [
+  "tests/test_ai_acceptance.py",
   "tests/test_demo_app.py",
 ]

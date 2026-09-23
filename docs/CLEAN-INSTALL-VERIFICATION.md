@@ -1,4 +1,9 @@
-# Clean-install verification — 2.1 and 2.1.1
+# Historical Clean-install Verification — 2.1 and 2.1.1
+
+> **LEGACY EVIDENCE, NOT CURRENT INSTRUCTIONS.** This record describes 2.1/2.1.1
+> acceptance attempts only. Do not run its API/subscription acceptance command for
+> CommitScope 2.4.0 corporate review. Use [Start Here](../START-HERE.md) and
+> [current verification](VERIFICATION.md) instead.
 
 Date: **2026-09-20**. Verdict: **FULL END-TO-END ACCEPTANCE NOT ESTABLISHED.**
 
@@ -86,7 +91,7 @@ performed by the project; installing missing OS prerequisites is an administrato
 task described in START-HERE. Vendor auto-update behavior outside the adapter is
 not globally controlled by this project.
 
-## Release gate that remains open
+## Historical 2.1.1 Release Gate (Not Current Procedure)
 
 The real acceptance command must complete on the intended deployment host:
 

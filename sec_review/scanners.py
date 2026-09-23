@@ -2,7 +2,7 @@
 from __future__ import annotations
 from datetime import datetime, timezone
 from pathlib import Path
-from .core import ReviewError, digest, safe_path, read_json, execute, child_env, private_dir, file_hash, write_text
+from .core import ReviewError, digest, safe_path, read_json, execute, child_env, private_dir, file_hash, write_text, now
 from .paths import current_resource_root
 from .tools import semgrep_child_env
 
@@ -101,8 +101,9 @@ def run_scanners(source: Path, out: Path, paths: dict[str,Path], *, tools_root: 
     results=[]; all_findings=[]
     for name,command in commands.items():
         print(f'Running {name}...',flush=True)
-        item={'name':name,'status':'failed','reason':'','command':command,'raw_report':f'raw/{name}.json'}
+        item={'name':name,'status':'failed','reason':'','command':command,'raw_report':f'raw/{name}.json', 'started_at':now()}
         try:
+            write_text(raw/(name+'.json'), '')
             env=semgrep_child_env(tools_root,home) if name=='semgrep' else child_env(home,network=name.startswith('trivy'))
             r=execute(command,cwd,env,timeout)
             item.update(exit_code=r.code,duration_seconds=r.seconds,timed_out=r.timed_out)
@@ -141,5 +142,15 @@ def run_scanners(source: Path, out: Path, paths: dict[str,Path], *, tools_root: 
                 else: item['reason']=f'{coverage["target_count"]} infrastructure configuration targets examined'
         except (ReviewError,KeyError,TypeError,ValueError,OSError) as e:
             item.update(status='failed',reason=str(e)[:2000])
+        item['finished_at'] = now()
+        if (raw/(name+'.json')).is_file() and not (raw/(name+'.json')).is_symlink():
+            (raw/(name+'.json')).chmod(0o600)
         results.append(item)
     return results,all_findings
+
+
+def corporate_scanner_findings(findings: list[dict]) -> list[dict]:
+    """Supply explicit unassessed fields without inventing scanner analysis."""
+    return [{**item, **{key: 'not assessed by scanner' for key in (
+        'attacker_control', 'trace', 'impact', 'evidence', 'counterarguments', 'reproduction_plan')}}
+            for item in findings]

@@ -12,7 +12,7 @@ EXCLUDED_DIRS={'.tools','.runs','.venv','venv','node_modules','vendor','dist','b
 def git(repo: Path, *args: str) -> bytes:
     exe=shutil.which('git')
     if not exe: raise ReviewError('Git is required')
-    cmd=[exe,'-c','core.fsmonitor=false','-c','core.hooksPath='+os.devnull,
+    cmd=[exe,'--no-replace-objects','-c','core.fsmonitor=false','-c','core.hooksPath='+os.devnull,
          '-c','core.pager=cat','-c','core.quotepath=false','-C',str(repo),*args]
     try:
         result=subprocess.run(cmd,env=child_env(repo.parent),stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=60,check=False)
@@ -24,6 +24,14 @@ def resolve(repo: Path, ref: str) -> str:
     if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_./~^{}-]*',ref): raise ReviewError('Invalid Git revision')
     sha=git(repo,'rev-parse','--verify','--end-of-options',ref+'^{commit}').decode().strip()
     if not re.fullmatch(r'[0-9a-f]{40}|[0-9a-f]{64}',sha): raise ReviewError('Git did not return a full commit ID')
+    return sha
+
+def resolve_exact_commit(repo: Path, ref: str) -> str:
+    if not isinstance(ref, str) or not re.fullmatch(r'[0-9a-f]{40}|[0-9a-f]{64}', ref):
+        raise ReviewError('Corporate review requires a full lowercase 40- or 64-character commit ID')
+    sha = resolve(repo, ref)
+    if sha != ref:
+        raise ReviewError('Resolved commit does not match the requested commit ID')
     return sha
 
 def export_snapshot(repo: Path, dest: Path, ref: str='HEAD', base: str | None=None,

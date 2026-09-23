@@ -4,10 +4,13 @@ import io
 import json
 import os
 from pathlib import Path
+import signal
 import subprocess
 import sys
 import tarfile
 import tempfile
+import threading
+import time
 import unittest
 from unittest.mock import patch
 
@@ -17,6 +20,101 @@ from sec_review.core import trusted_internal_temp_path
 tempfile.tempdir = str(trusted_internal_temp_path(Path(tempfile.gettempdir())))
 
 class CoreTests(unittest.TestCase):
+    def wait_for_child(self, pid_file):
+        deadline = time.monotonic() + 10
+        while not pid_file.is_file() and time.monotonic() < deadline:
+            time.sleep(.01)
+        self.assertTrue(pid_file.is_file(), 'sleeping child did not start')
+
+    def interrupt_when_ready(self, pid_file):
+        def interrupt():
+            deadline = time.monotonic() + 10
+            while not pid_file.is_file() and time.monotonic() < deadline:
+                if timer.finished.wait(.01):
+                    return
+            if not timer.finished.is_set():
+                os.kill(os.getpid(), signal.SIGINT)
+        timer = threading.Timer(0, interrupt)
+        return timer
+
+    def same_group_command(self, pid_file):
+        child = ('import os,pathlib,signal,sys,time; '
+                 'signal.signal(signal.SIGINT,signal.SIG_IGN); '
+                 'pathlib.Path(sys.argv[1]).write_text(str(os.getpid())); time.sleep(30)')
+        leader = ('import subprocess,sys; '
+                  f'subprocess.Popen([sys.executable,"-I","-c",{child!r},sys.argv[1]]).wait()')
+        return [sys.executable, '-I', '-c', leader, str(pid_file)]
+
+    @unittest.skipUnless(os.name == 'posix', 'process groups are POSIX-specific')
+    def test_timeout_kills_ignoring_group_member_after_leader_exits(self):
+        from sec_review.core import execute, child_env
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            pid_file = root / 'child.pid'
+            try:
+                result = execute(self.same_group_command(pid_file), root, child_env(root), 1)
+                self.assertTrue(result.timed_out)
+                self.assertEqual(result.code, 124)
+                self.assert_pid_stopped(pid_file)
+            finally:
+                self.stop_pid_from(pid_file)
+
+    @unittest.skipUnless(os.name == 'posix', 'process groups are POSIX-specific')
+    def test_interrupt_kills_ignoring_group_member_after_leader_exits(self):
+        from sec_review.core import execute, child_env
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            pid_file = root / 'child.pid'
+            timer = self.interrupt_when_ready(pid_file)
+            timer.start()
+            try:
+                with self.assertRaises(KeyboardInterrupt):
+                    execute(self.same_group_command(pid_file), root, child_env(root), 10)
+                self.assert_pid_stopped(pid_file)
+            finally:
+                timer.cancel()
+                self.stop_pid_from(pid_file)
+
+    def nested_execute_command(self, root, pid_file, *, ignore_interrupt=False, unwind_file=None):
+        child = (('import signal; signal.signal(signal.SIGINT,signal.SIG_IGN); '
+                  if ignore_interrupt else '') +
+                 'import os,pathlib,sys,time; '
+                 'pathlib.Path(sys.argv[1]).write_text(str(os.getpid())); time.sleep(30)')
+        middle = (
+            'import pathlib,sys,time\n'
+            'sys.path.insert(0,sys.argv[1])\n'
+            'from sec_review.core import child_env,execute\n'
+            'root=pathlib.Path(sys.argv[2])\n'
+            'try:\n'
+            f'    execute([sys.executable,"-I","-c",{child!r},sys.argv[3]],root,child_env(root),30)\n'
+            'except KeyboardInterrupt:\n'
+            '    if sys.argv[4]:\n'
+            '        time.sleep(.5)\n'
+            '        pathlib.Path(sys.argv[4]).write_text("unwound")\n'
+            '    raise\n'
+        )
+        return [sys.executable, '-I', '-c', middle, str(ROOT), str(root), str(pid_file),
+                str(unwind_file) if unwind_file else '']
+
+    def assert_pid_stopped(self, pid_file):
+        self.assertTrue(pid_file.is_file(), 'nested sleep child did not start')
+        pid = int(pid_file.read_text())
+        deadline = time.monotonic() + 2
+        while time.monotonic() < deadline:
+            try:
+                os.kill(pid, 0)
+            except ProcessLookupError:
+                return
+            time.sleep(.02)
+        self.fail('nested execute left its innermost child running')
+
+    def stop_pid_from(self, pid_file):
+        if pid_file.is_file():
+            try:
+                os.kill(int(pid_file.read_text()), signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+
     def test_json_duplicate_keys_rejected(self):
         from sec_review.core import decode_json, ReviewError
         with self.assertRaises(ReviewError): decode_json('{"a":1,"a":2}')
@@ -44,6 +142,137 @@ class CoreTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             r = execute([sys.executable, '-I', '-c', 'import time;time.sleep(10)'], Path(d), child_env(Path(d)), .1)
             self.assertTrue(r.timed_out); self.assertNotEqual(r.code, 0)
+    @unittest.skipUnless(os.name == 'posix', 'process-group interrupt behavior is POSIX-specific')
+    def test_keyboard_interrupt_terminates_and_reaps_child(self):
+        from sec_review.core import execute, child_env
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            pid_file = root / 'child.pid'
+            code = ('import os,pathlib,sys,time; '
+                    'pathlib.Path(sys.argv[1]).write_text(str(os.getpid())); time.sleep(30)')
+            timer = self.interrupt_when_ready(pid_file)
+            timer.start()
+            try:
+                with self.assertRaises(KeyboardInterrupt):
+                    execute([sys.executable, '-I', '-c', code, str(pid_file)], root, child_env(root), 10)
+                self.assertTrue(pid_file.is_file(), 'sleeping child did not start before the interrupt')
+                pid = int(pid_file.read_text())
+                deadline = time.monotonic() + 2
+                while time.monotonic() < deadline:
+                    try:
+                        os.kill(pid, 0)
+                    except ProcessLookupError:
+                        break
+                    time.sleep(.02)
+                else:
+                    self.fail('interrupted execute left its child process running')
+            finally:
+                timer.cancel()
+                if pid_file.is_file():
+                    try:
+                        os.kill(int(pid_file.read_text()), signal.SIGKILL)
+                    except ProcessLookupError:
+                        pass
+    @unittest.skipUnless(os.name == 'posix', 'nested process-group behavior is POSIX-specific')
+    def test_keyboard_interrupt_allows_nested_execute_to_reap_innermost_child(self):
+        from sec_review.core import execute, child_env
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            pid_file = root / 'nested-child.pid'
+            timer = self.interrupt_when_ready(pid_file)
+            timer.start()
+            try:
+                with self.assertRaises(KeyboardInterrupt):
+                    execute(self.nested_execute_command(root, pid_file), root, child_env(root), 10)
+                self.assert_pid_stopped(pid_file)
+            finally:
+                timer.cancel()
+                self.stop_pid_from(pid_file)
+    @unittest.skipUnless(os.name == 'posix', 'nested process-group behavior is POSIX-specific')
+    def test_untrusted_managed_marker_cannot_disable_nested_cleanup(self):
+        from sec_review.core import execute, child_env
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            pid_file = root / 'nested-child.pid'
+            timer = self.interrupt_when_ready(pid_file)
+            timer.start()
+            try:
+                with patch.dict(os.environ, {'_COMMITSCOPE_MANAGED_EXECUTE': '1'}), \
+                     self.assertRaises(KeyboardInterrupt):
+                        execute(self.nested_execute_command(root, pid_file), root, child_env(root), 10)
+                self.assert_pid_stopped(pid_file)
+            finally:
+                timer.cancel()
+                self.stop_pid_from(pid_file)
+    @unittest.skipUnless(os.name == 'posix', 'nested process-group behavior is POSIX-specific')
+    def test_second_keyboard_interrupt_does_not_preempt_nested_cleanup(self):
+        from sec_review.core import execute, child_env
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            pid_file = root / 'nested-child.pid'
+            unwind_file = root / 'unwound'
+            timer = self.interrupt_when_ready(pid_file)
+            timer.start()
+            original_communicate = subprocess.Popen.communicate
+            calls = 0
+            def communicate(process, *args, **kwargs):
+                nonlocal calls
+                calls += 1
+                if calls == 2:
+                    raise KeyboardInterrupt()
+                return original_communicate(process, *args, **kwargs)
+            try:
+                command = self.nested_execute_command(root, pid_file, unwind_file=unwind_file)
+                with patch.object(subprocess.Popen, 'communicate', new=communicate), \
+                     self.assertRaises(KeyboardInterrupt):
+                        execute(command, root, child_env(root), 10)
+                self.assert_pid_stopped(pid_file)
+                self.assertEqual(unwind_file.read_text(), 'unwound')
+            finally:
+                timer.cancel()
+                self.stop_pid_from(pid_file)
+    @unittest.skipUnless(os.name == 'posix', 'nested process-group behavior is POSIX-specific')
+    def test_timeout_allows_nested_execute_to_reap_innermost_child(self):
+        from sec_review.core import execute, child_env
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            pid_file = root / 'nested-child.pid'
+            try:
+                command = self.nested_execute_command(root, pid_file, ignore_interrupt=True)
+                result = execute(command, root, child_env(root), 1)
+                self.assertTrue(result.timed_out)
+                self.assertEqual(result.code, 124)
+                self.assert_pid_stopped(pid_file)
+            finally:
+                self.stop_pid_from(pid_file)
+    @unittest.skipUnless(os.name == 'posix', 'process-group interrupt behavior is POSIX-specific')
+    def test_keyboard_interrupt_during_timeout_cleanup_is_propagated_after_reap(self):
+        from sec_review.core import execute, child_env
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            pid_file = root / 'child.pid'
+            code = ('import os,pathlib,signal,sys,time; '
+                    'signal.signal(signal.SIGINT,signal.SIG_IGN); '
+                    'pathlib.Path(sys.argv[1]).write_text(str(os.getpid())); time.sleep(30)')
+            original_communicate = subprocess.Popen.communicate
+            calls = 0
+            def communicate(process, *args, **kwargs):
+                nonlocal calls
+                calls += 1
+                if calls == 1:
+                    self.wait_for_child(pid_file)
+                if calls == 2:
+                    raise KeyboardInterrupt()
+                return original_communicate(process, *args, **kwargs)
+            try:
+                with patch.object(subprocess.Popen, 'communicate', new=communicate), \
+                     patch('sec_review.core.INTERRUPT_GRACE_SECONDS', .1), \
+                     self.assertRaises(KeyboardInterrupt):
+                        execute([sys.executable, '-I', '-c', code, str(pid_file)],
+                                root, child_env(root), .2)
+                self.assert_pid_stopped(pid_file)
+            finally:
+                self.stop_pid_from(pid_file)
     def test_shell_metacharacters_are_data(self):
         from sec_review.core import execute, child_env
         with tempfile.TemporaryDirectory() as d:

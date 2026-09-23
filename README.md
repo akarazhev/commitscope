@@ -2,176 +2,128 @@
 
 **Evidence-driven security review for Git repositories.**
 
-CommitScope installs pinned open-source scanners locally, exports an immutable Git
-snapshot, runs scanner checks, and writes normalized JSON, Markdown, and SARIF
-evidence. Claude Code can be used as an optional AI verification layer after scanner
-results exist and after explicit source-upload consent.
+CommitScope 2.4 runs one local corporate workflow over an immutable Git commit:
+Semgrep, Gitleaks, Trivy, an independent Claude Hunter, an independent Claude
+Verifier, protected evidence, and a human decision. It is a local review tool, not
+a merge-approval service, penetration test, security guarantee, or official
+Anthropic product.
 
-**Status:** scanner-ready source project for trusted Git repositories. It is not a
-certified production security gate, merge approval service, penetration test, or
-official Anthropic product. Native Windows is outside scope; use Linux/WSL2 instead.
+## Install The Reviewed Source
 
-## Consumer Install Paths
-
-GitHub-hosted pipx installation for consumers pinning the `v2.3.0` source ref:
+No public `v2.4.0` tag is claimed by this checkout. Clone or otherwise obtain the
+reviewed source revision, then install that exact local checkout:
 
 ```bash
-pipx install "git+https://github.com/akarazhev/commitscope.git@v2.3.0"
+pipx install /absolute/path/to/commitscope
 commitscope preflight
 commitscope bootstrap
 commitscope doctor
 ```
 
-Upgrade to the same immutable release tag:
+Source-checkout commands remain available as `python3 -I review.py <command>`.
+Supported hosts are macOS and glibc Linux on x86_64 or ARM64 with Python 3.11-3.14.
+Native Windows is outside scope; use a supported Linux environment under WSL2.
+
+Scanner binaries and databases are downloaded at install/runtime. Pinned versions
+are Semgrep 1.177.0, Gitleaks 8.30.1, and Trivy 0.74.0. Install the official Claude
+Code CLI separately, then sign in as the unprivileged OS user who will run reviews:
 
 ```bash
-pipx upgrade commitscope
+sh scripts/install-claude.sh
+claude auth login
+claude auth status
+claude --version
 ```
 
-Source checkout remains supported:
+Corporate review requires Claude Code 2.1.259 or newer; 2.1.278 is the pinned
+new-install version. The wrapper leaves an existing installation unchanged. Update
+an older CLI through its official installation channel before running a review.
+For native installs run `claude update`; for Homebrew run
+`brew upgrade --cask claude-code`, then check `claude --version`.
+
+Account login is the only corporate authentication path. See
+[Authentication](docs/AUTHENTICATION.md) before using a managed workstation.
+
+## Run The Corporate Review
+
+Prepare a reviewed policy outside the target repository. The target must be a clean
+Git worktree, `--ref` must be a full lowercase 40- or 64-character commit ID, and the
+new output path must be outside the target under protected storage. The policy file,
+its parent directory, and the output parent must be owned by the current user or root
+and must not be group/world writable.
+The policy is screened for recognizable credentials before scanners or model calls.
+Remove Bearer/Basic authorization values, URLs with user information, and other
+credential-like material. This heuristic cannot identify every unknown secret.
 
 ```bash
-python3 -I review.py doctor
-```
-
-Source checkouts store scanners in `.tools/`. Installed CLI runs store scanners in
-`$COMMITSCOPE_HOME/tools` when `COMMITSCOPE_HOME` is set to an absolute path; otherwise
-macOS uses `~/Library/Caches/CommitScope/tools`, Linux uses
-`$XDG_CACHE_HOME/commitscope/tools` when set, and Linux falls back to
-`~/.cache/commitscope/tools`. Default scan/demo outputs go under `.runs/` relative to
-the operator's current directory.
-
-## Supported Host Scope
-
-- macOS and Linux on x86_64 or ARM64.
-- Python 3.11, 3.12, 3.13, or 3.14 with `venv` and pip.
-- Linux requires glibc 2.34 or later; Ubuntu 24.04 is the reference Linux host.
-- Scanner versions are pinned: Semgrep 1.177.0, Gitleaks 8.30.1, Trivy 0.74.0.
-
-Scanner binaries and Trivy databases are downloaded at install/runtime; they are not
-bundled in this repository.
-
-## First Run
-
-```bash
-cd commitscope
-
-python3 -I review.py preflight
-sh scripts/bootstrap.sh
-python3 -I review.py doctor
-python3 -I review.py demo --out .runs/first-demo
-python3 -I scripts/acceptance.py --out .runs/acceptance-scanners
-```
-
-Expected scanner-only acceptance output is `SCANNERS_VERIFIED_AI_NOT_RUN` with exit
-code 0. The demo command prints `DEMO_PASSED` when the real scanners detect the
-vulnerable fixture and the fixed fixture passes the configured threshold.
-
-## GitHub Action Consumer Workflow
-
-Use `docs/examples/commitscope.yml` as the starting consumer workflow. The scanner
-step is:
-
-```yaml
-uses: akarazhev/commitscope@v2.3.0
-```
-
-The example pins third-party actions to full commit SHAs and uses the `v2.3.0` tag
-for CommitScope. Tag pinning is readable but depends on tag governance; consumers
-that require immutable action source should replace the tag with a reviewed full
-commit SHA. Do not use a moving branch such as `main` for a required control.
-
-The action is scanner-only: it has no AI mode, no source upload path, and it does
-not build the target or install target dependencies. SARIF upload requires
-`security-events: write`; GitHub may restrict that permission for pull requests from
-forks, so keep the always-run artifact upload as the portable evidence path.
-
-## Scan A Repository
-
-Commit or stash target changes first. CommitScope scans the selected Git commit, not
-uncommitted files, and does not build the target or install target dependencies.
-
-```bash
-python3 -I review.py scan \
+commitscope review \
   --repo /absolute/path/to/application \
-  --ref HEAD \
-  --out .runs/application-001
-```
-
-Outputs:
-
-- `.runs/application-001/report.json`
-- `.runs/application-001/report.md`
-- `.runs/application-001/report.sarif`
-
-Exit codes:
-
-| Exit | Meaning |
-|---|---|
-| `0` | Required scanner checks completed with no findings at the configured threshold. Not a security guarantee or approval. |
-| `1` | Findings meet the configured threshold; human triage is required. |
-| `2` | The review is incomplete or a prerequisite failed. Missing coverage does not become a pass. |
-
-Use `--fail-on medium` or `--fail-on low` for stricter thresholds. Use
-`--allow-empty-sca "reason"` only when the target truly has no third-party
-dependencies to inventory.
-
-## Optional Claude Code Verification
-
-Claude Code is optional. It is a bounded AI verification layer, not a scanner
-replacement and not an Anthropic endorsement of this project.
-
-Run local auth checks without source upload or model calls:
-
-```bash
-python3 -I review.py auth-check --auth subscription
-python3 -I review.py auth-check --auth api
-```
-
-Run AI only after explicit approval to upload selected source excerpts:
-
-```bash
-python3 -I review.py ai \
-  --run .runs/application-001 \
-  --auth subscription \
+  --ref 0123456789abcdef0123456789abcdef01234567 \
+  --policy /protected/review-policy.json \
+  --out /protected/reviews/run-id \
+  --auth account \
   --allow-code-upload \
-  --model sonnet
+  --model APPROVED_EXACT_MODEL_ID
 ```
+
+`--allow-code-upload` is explicit consent to send the bounded, screened source packet
+to Anthropic under the selected account's terms. Replace `APPROVED_EXACT_MODEL_ID`
+with the exact model ID approved by your organization; aliases such as `sonnet` are
+rejected. Login failure, exhausted quota, an unavailable model, timeout, malformed
+output, missing scanner coverage, or any failed stage produces `INCOMPLETE`; there
+is no API-key or alternate-provider fallback.
+
+Dependency inventory is strict by default. Add `--allow-empty-sca "reviewed reason"`
+only for an audited standard-library-only project after checking imports and build
+metadata. The declaration is recorded but not independently authenticated.
+
+## Understand The Result
+
+| Exit | State | Meaning |
+|---|---|---|
+| `0` | `READY_FOR_HUMAN_REVIEW` | All required scanner, Hunter, and Verifier stages completed and no normalized finding met the policy threshold. |
+| `1` | `FINDINGS_REQUIRE_TRIAGE` | All required stages completed and at least one normalized finding met the threshold. |
+| `2` | `INCOMPLETE` | A prerequisite, required stage, evidence check, timeout, or protocol validation failed. |
+
+READY_FOR_HUMAN_REVIEW does not approve a merge or assert that the application is secure.
+
+The whole output directory is confidential. It is created with restrictive
+permissions and contains normalized top-level reports and `evidence/`, plus raw source
+packets, scanner output, model envelopes, and diagnostics under `private/`. Do not
+publish or commit the run directory. Share only normalized files after applying your
+company's data-handling rules.
+
+## Hand Off To A Human Reviewer
+
+Give the unchanged protected run directory to the assigned reviewer. The reviewer
+first runs:
 
 ```bash
-python3 -I review.py ai \
-  --run .runs/application-001 \
-  --auth api \
-  --allow-code-upload \
-  --model sonnet \
-  --budget-usd 4
+commitscope verify-review --run /protected/reviews/run-id
 ```
 
-Subscription and API modes are explicit alternatives. CommitScope never falls back
-between them, and scanner-only readiness does not require AI acceptance.
+`verify-review` checks layout, permissions, hashes, commit/snapshot consistency,
+required stage completion, Hunter/Verifier coverage, and the recorded decision. It
+also warns that the manifest is unsigned: its authorship and immutability are not
+cryptographically verified. The reviewer inspects the normalized evidence and
+completes a copy of `reviewer-decision-template.json` in the protected company
+decision system. Human identity and approval remain outside CommitScope.
 
-## What Is Included
+For a fix, create a new commit and a new output directory, then rerun the complete
+command. Never edit or overwrite the earlier evidence. A result for one commit does
+not carry forward to another commit.
 
-| Component | Behavior |
-|---|---|
-| `scripts/bootstrap.sh`, `sec_review/tools.py` | Project-local installation in `.tools/`; no sudo; SHA256 and version checks for pinned scanner artifacts. |
-| `review.py scan` | Clean Git snapshot export, scanner execution, normalized reports, explicit policy exit code. |
-| `config/semgrep.yaml` | Bundled baseline Python/JavaScript/TypeScript rules. Not an exhaustive rule pack. |
-| Gitleaks check | Snapshot secret scan with redaction and a synthetic demo-token rule. |
-| Trivy checks | Dependency-vulnerability and IaC misconfiguration scans with inventory/freshness policy. |
-| `review.py demo` | Vulnerable/fixed fixture acceptance using real installed scanners. |
-| `scripts/acceptance.py` | End-to-end scanner acceptance, with optional live AI modes only when explicitly selected. |
-| `action.yml` | Composite scanner-only GitHub Action interface for consumer workflows. |
-| `.github/workflows/verify.yml` | Unit/protocol matrix on Ubuntu and macOS for Python 3.11-3.14 plus real scanner acceptance on Ubuntu and macOS. |
-| `.github/workflows/scan.yml` | Manual trusted-repository scan workflow for a selected full commit SHA. |
+## CI And Partial Commands
 
-## Boundaries
+The GitHub Action and supplied workflows remain scanner-only evidence producers. Their
+normalized reports can inform the later local review, but they do not run the required
+Hunter/Verifier and are not completed corporate reviews. Do not upload `private/`.
 
-CommitScope runs native scanner processes as the current OS user. It is not a
-container, VM, seccomp profile, egress firewall, or hostile-code sandbox. Use
-disposable unprivileged runners for adversarial repositories, keep `.tools/` and
-`.runs/` out of Git, and do not attach production credentials, Docker sockets, SSH
-agents, or privileged mounts.
+`commitscope scan` and `commitscope ai` remain for diagnostics and compatibility.
+Neither command alone, nor the two assembled manually, is the corporate workflow:
+they do not provide the atomic preconditions, account-only policy, protected layout,
+manifest, and verifier contract enforced by `commitscope review`.
 
-See [START-HERE](START-HERE.md), [Security boundaries](docs/SECURITY.md),
-[Verification](docs/VERIFICATION.md), and [CI setup](docs/CI.md).
+See [Start Here](START-HERE.md), [Security](docs/SECURITY.md),
+[Verification](docs/VERIFICATION.md), [CI](docs/CI.md), and
+[Review Process](docs/REVIEW-PROCESS.md).
