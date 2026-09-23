@@ -118,7 +118,7 @@ def _load_policy(path: Path, repo: Path) -> tuple[dict[str, Any], str]:
     _absolute(path, 'Policy')
     _absolute(repo, 'Repository')
     state = protected_path_stat(path)
-    protected_path_stat(path.parent, directory=True, require_owner=False)
+    protected_path_stat(path.parent, directory=True)
     _outside(path, repo, 'Policy')
     if state.st_size > MAX_POLICY_BYTES:
         raise ReviewError('Policy exceeds the 1 MiB size limit')

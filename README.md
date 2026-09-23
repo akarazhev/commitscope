@@ -41,7 +41,9 @@ Account login is the only corporate authentication path. See
 
 Prepare a reviewed policy outside the target repository. The target must be a clean
 Git worktree, `--ref` must be a full lowercase 40- or 64-character commit ID, and the
-new output path must be outside the target under protected storage.
+new output path must be outside the target under protected storage. The policy file,
+its parent directory, and the output parent must be owned by the current user or root
+and must not be group/world writable.
 
 ```bash
 commitscope review \

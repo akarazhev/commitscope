@@ -53,7 +53,8 @@ reproduction, remove scanner findings, or approve a merge.
 ## Protected Evidence
 
 The output path must be outside the target and must not exist. CommitScope rejects
-symlink components and unsafe parent permissions. It creates directories with mode
+symlink components and unsafe parent permissions. The policy file, its parent, and
+the output parent must be owned by the current user or root. It creates directories with mode
 `0700` and files with mode `0600`.
 
 Normalized top-level reports and `evidence/` exclude known credential values and

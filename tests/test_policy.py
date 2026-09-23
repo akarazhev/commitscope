@@ -264,17 +264,22 @@ class PolicyTests(unittest.TestCase):
                         with self.assertRaises(ReviewError):
                             self.request()
 
-    def test_policy_parent_requires_safe_mode_but_not_current_ownership(self):
+    def test_policy_parent_must_be_owned_by_current_user_or_root(self):
         real_stat = os.stat
-        def fake_stat(path, *args, **kwargs):
-            result = real_stat(path, *args, **kwargs)
-            if Path(path) == self.policy_path.parent:
-                fields = list(result)
-                fields[4] = os.getuid() + 10000
-                return os.stat_result(fields)
-            return result
-        with patch('os.stat', side_effect=fake_stat):
-            self.assertEqual(load_review_policy(self.policy_path, self.repo), POLICY)
+        for owner in (0, os.getuid(), os.getuid() + 10000):
+            def fake_stat(path, *args, **kwargs):
+                result = real_stat(path, *args, **kwargs)
+                if Path(path) == self.policy_path.parent:
+                    fields = list(result)
+                    fields[4] = owner
+                    return os.stat_result(fields)
+                return result
+            with self.subTest(owner=owner), patch('os.stat', side_effect=fake_stat):
+                if owner in (0, os.getuid()):
+                    self.assertEqual(load_review_policy(self.policy_path, self.repo), POLICY)
+                else:
+                    with self.assertRaisesRegex(ReviewError, 'must be owned'):
+                        load_review_policy(self.policy_path, self.repo)
 
     def test_dirty_staged_and_untracked_target_rejected(self):
         for change in ('dirty', 'staged', 'untracked'):
