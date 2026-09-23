@@ -50,6 +50,22 @@ class FixedEvalFixtureTests(unittest.TestCase):
     def test_calculate_preserves_bounded_arithmetic(self):
         self.assertEqual(load_fixed_eval_fixture().calculate("(2 + 3) * 4 / 2"), 10)
 
+    def test_calculate_preserves_large_finite_integer(self):
+        expression = "9" * 200
+        self.assertEqual(load_fixed_eval_fixture().calculate(expression), int(expression))
+
+    def test_calculate_rejects_unencodable_source_as_invalid_input(self):
+        with self.assertRaisesRegex(ValueError, "Invalid arithmetic expression"):
+            load_fixed_eval_fixture().calculate("\ud800")
+
+    def test_calculate_rejects_nonfinite_float_literal(self):
+        with self.assertRaises(ValueError):
+            load_fixed_eval_fixture().calculate("1e309")
+
+    def test_calculate_rejects_nonfinite_arithmetic_result(self):
+        with self.assertRaises(ValueError):
+            load_fixed_eval_fixture().calculate("1e308 * 10")
+
     def test_calculate_rejects_code_execution(self):
         with self.assertRaises(ValueError):
             load_fixed_eval_fixture().calculate("__import__('os').system('echo unsafe')")
