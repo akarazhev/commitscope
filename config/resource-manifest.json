@@ -135,11 +135,11 @@
     },
     {
       "path": "scripts/ai_acceptance.py",
-      "sha256": "9624f6496928e1d08a31432fc68d5316c9050e9bfdf762d743101075ce985c56"
+      "sha256": "c66ac004e5e813ac07ecc44aa8f77555ae0df95d600c3118d33a7cd39320fc70"
     },
     {
       "path": "tests/test_ai_acceptance.py",
-      "sha256": "e8e71320312dbe231aeb225fa7794ce4c2894e1d767a850f87b9570bfe48a340"
+      "sha256": "93e4e6aee519f18bf1e34d2a483b006f046f8ab6d6f699b25be0a47f639fad9a"
     },
     {
       "path": "tests/test_demo_app.py",

@@ -5,6 +5,7 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import pwd
 import stat
 import subprocess
 import sys
@@ -66,6 +67,8 @@ class AIAcceptanceTests(unittest.TestCase):
 
     def test_protocol_double_runs_six_clean_public_reviews_and_records_metrics(self):
         module = load_harness()
+        self.out = self.out.parent / 'ci' / 'acceptance'
+        self.out.parent.mkdir()
         calls = []
 
         def fake_review(command, cwd, env, timeout):
@@ -138,6 +141,9 @@ class AIAcceptanceTests(unittest.TestCase):
         self.assertTrue(all(stat.S_IMODE(path.stat().st_mode) == 0o700 for path in outputs))
         self.assertEqual(len(result["comparisons"]), 3)
         self.assertEqual(len(result["runs"]), 6)
+        self.assertEqual({item['output'] for item in result['runs']},
+                         {f'reviews/{relative.replace("/", "-")}' for relative in FIXTURES})
+        self.assertNotIn(str(self.out.parent), (self.out / 'acceptance.json').read_text())
         self.assertTrue(all(item["status"] == "complete" for item in result["runs"]))
         self.assertTrue(all(item["detection"] is True for item in result["comparisons"]))
         self.assertTrue(all(item["false_positives"] == 0 for item in result["comparisons"]))
@@ -199,6 +205,24 @@ class AIAcceptanceTests(unittest.TestCase):
         self.assertEqual(fixed["finding_count"], 0)
         self.assertRegex(fixed["commit"], r"^[0-9a-f]{40,64}$")
         self.assertEqual(json.loads((self.out / "acceptance.json").read_text()), result)
+
+    def test_runner_error_with_account_home_path_is_sanitized(self):
+        module = load_harness()
+        username = pwd.getpwuid(os.getuid()).pw_name
+        self.out = self.out.parent / username / 'acceptance'
+        self.out.parent.mkdir()
+
+        def failing_review(command, cwd, env, timeout):
+            output = Path(command[command.index('--out') + 1])
+            raise module.ReviewError('Synthetic failure at ' + str(output))
+
+        code, result = module.run_acceptance(
+            self.out, model=MODEL, allow_code_upload=True, review_runner=failing_review)
+        self.assertEqual(code, 2)
+        self.assertEqual(result['status'], 'INCOMPLETE')
+        saved = (self.out / 'acceptance.json').read_text()
+        self.assertNotIn(str(self.out.parent), saved)
+        self.assertTrue(all(item['output'].startswith('reviews/') for item in result['runs']))
 
 
 if __name__ == "__main__":

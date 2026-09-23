@@ -6,6 +6,7 @@ import argparse
 import json
 import os
 from pathlib import Path
+import pwd
 import shutil
 import subprocess
 import sys
@@ -17,6 +18,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from sec_review.ai import validate_exact_model  # noqa: E402
+from sec_review.auth import redact_account_username  # noqa: E402
 from sec_review.core import (  # noqa: E402
     ProcessResult,
     ReviewError,
@@ -39,6 +41,11 @@ EMPTY_SCA_REASON = (
     "and declare no third-party dependencies."
 )
 ReviewRunner = Callable[[list[str], Path, dict[str, str], float], ProcessResult]
+
+
+def _private_error(error: Exception) -> str:
+    username = pwd.getpwuid(os.getuid()).pw_name
+    return redact_account_username(str(error), {username})
 
 
 def _default_review_runner(
@@ -156,7 +163,7 @@ def _review_fixture(
         "scenario": scenario,
         "variant": variant,
         "commit": commit,
-        "output": str(output),
+        "output": output.relative_to(output.parent.parent).as_posix(),
         "started_at": started_at,
         "finished_at": now(),
         "latency_seconds": result.seconds,
@@ -269,7 +276,7 @@ def run_acceptance(
                         "scenario": scenario,
                         "variant": variant,
                         "commit": commit,
-                        "output": str(output),
+                        "output": output.relative_to(out).as_posix(),
                         "started_at": started_at,
                         "finished_at": None,
                         "latency_seconds": 0,
@@ -300,11 +307,11 @@ def run_acceptance(
                         "scenario": scenario,
                         "variant": variant,
                         "commit": commit,
-                        "output": str(output),
+                        "output": output.relative_to(out).as_posix(),
                         "started_at": started_at,
                         "finished_at": now(),
                         "status": "incomplete",
-                        "error": str(error),
+                        "error": _private_error(error),
                         "latency_seconds": 0,
                         "exit_code": 2,
                         "finding_count": 0,
@@ -346,7 +353,7 @@ def run_acceptance(
         else:
             value["status"] = "INCOMPLETE"
     except (ReviewError, OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError) as error:
-        value.update(status="INCOMPLETE", error=str(error))
+        value.update(status="INCOMPLETE", error=_private_error(error))
     except KeyboardInterrupt:
         value.update(status="INCOMPLETE", error="Operator interrupted the acceptance run")
     finally:
