@@ -8,6 +8,7 @@ import copy
 import json
 import os
 from pathlib import Path
+import pwd
 import sys
 import tempfile
 import unittest
@@ -160,6 +161,15 @@ class CorporateAccountTests(CorporateFixture):
             self.assertNotIn(key, result.env)
         self.assertNotIn('DO_NOT_SAVE', json.dumps(result.metadata))
         self.assertTrue(all('-p' not in call['argv'] for call in self.calls()))
+
+    def test_saved_login_uses_os_account_name_not_ambient_user(self):
+        expected = pwd.getpwuid(os.getuid()).pw_name
+        for ambient in ({}, {'USER': 'spoofed-account-name'}):
+            with self.subTest(ambient=ambient), self.synthetic(**ambient):
+                prepared = auth.prepare_account_claude(self.root)
+                self.assertEqual(prepared.env['USER'], expected)
+                self.assertNotIn('USER', prepared.metadata)
+                self.assertEqual(self.calls()[-1]['env']['USER'], expected)
 
     def test_ambient_credential_provider_profile_and_model_overrides_fail_before_process(self):
         for key in BLOCKED_NAMES:

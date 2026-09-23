@@ -10,6 +10,7 @@ import json
 import math
 import os
 from pathlib import Path
+import pwd
 import re
 import shutil
 import tempfile
@@ -293,6 +294,7 @@ def prepare_account_claude(work: Path) -> PreparedClaude:
     home = work / 'home'
     home.mkdir(mode=0o700, exist_ok=True)
     env = child_env(home, network=True)
+    env['USER'] = pwd.getpwuid(os.getuid()).pw_name
     for name in ('HOME', 'CLAUDE_CONFIG_DIR'):
         value = os.environ.get(name)
         if name == 'HOME' and not value:
