@@ -3,12 +3,14 @@ import copy
 import json
 import importlib.util
 import os
+import re
 from pathlib import Path
 import shutil
 import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import MagicMock
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -146,6 +148,54 @@ class PdfTests(unittest.TestCase):
         diagram = build_pdfs.DiagramFlowable(block, style)
         diagram.wrap(507, 700)
         self.assertGreater(diagram.height, diagram.box_heights[0] + max(diagram.box_heights[1:3]) + diagram.box_heights[3] + 30)
+
+    def test_boundary_diagram_draws_both_cross_boundary_flows(self):
+        block = {"kind": "boundary", "nodes": [
+            {"id": "snapshot", "label": "Snapshot"}, {"id": "evidence", "label": "Evidence"},
+            {"id": "hunter", "label": "Hunter"}, {"id": "verifier", "label": "Verifier"},
+        ], "edges": [{"from": "snapshot", "to": "hunter"}, {"from": "evidence", "to": "verifier"}]}
+        style = build_pdfs.ParagraphStyle("boundary-test", fontName="Helvetica", fontSize=9, leading=12)
+        diagram = build_pdfs.DiagramFlowable(block, style)
+        diagram.wrap(507, 700)
+        diagram.canv = MagicMock()
+        diagram._box = lambda *args: None
+        arrows = []
+        diagram._arrow = lambda *args: arrows.append(args)
+        diagram.draw()
+        self.assertEqual(len(arrows), 2)
+
+    @unittest.skipUnless(shutil.which("pdftotext"), "Poppler required")
+    def test_methodology_has_sourced_bilingual_argument_and_figures(self):
+        sources = [json.loads((PDF_ROOT / f"source/content-{language}.json").read_text()) for language in ("en", "ru")]
+        build_pdfs.validate_pair(*sources)
+        expected_figures = {"practice-map", "comparison", "trust-boundary", "finding-lifecycle", "rollout"}
+        for source in sources:
+            language = source["language"]
+            document = source["documents"]["methodology"]
+            self.assertEqual([chapter["id"] for chapter in document["chapters"]], [f"m{i:02d}" for i in range(1, 9)])
+            self.assertTrue({f"S{i}" for i in range(1, 8)}.issubset({ref["id"] for ref in document["references"]}))
+            blocks = [block for chapter in document["chapters"] for section in chapter["sections"] for block in section["blocks"]]
+            self.assertTrue(expected_figures.issubset({block["id"] for block in blocks}))
+            boundary = next(block for block in blocks if block["id"] == "trust-boundary")
+            outgoing = {edge["from"] for edge in boundary["edges"]}
+            self.assertFalse(any("private/" in node["label"] for node in boundary["nodes"] if node["id"] in outgoing))
+            self.assertFalse(re.search(r"\b\d+(?:\.\d+)?%|\$\d+", json.dumps(document, ensure_ascii=False)))
+            pdf = PDF_ROOT / language / f"security-review-methodology-{language}.pdf"
+            extracted = run("pdftotext", "-layout", str(pdf), "-")
+            self.assertEqual(extracted.returncode, 0, extracted.stderr)
+            self.assertIn("2026-09-23", extracted.stdout)
+            self.assertIn("Figure 1" if language == "en" else "Рисунок 1", extracted.stdout)
+            self.assertIn("https://csrc.nist.gov/pubs/sp/800/218/final", extracted.stdout)
+            pages = extracted.stdout.split("\f")
+            for chapter, caption in (("02 / International practice", "Figure 1"),
+                                     ("05 / Architecture and trust", "Figure 2"),
+                                     ("06 / From hypothesis to fix", "Figure 3"),
+                                     ("07 / Controlled adoption", "Figure 4")) if language == "en" else (
+                                     ("02 / Мировая практика", "Рисунок 1"),
+                                     ("05 / Архитектура и доверие", "Рисунок 2"),
+                                     ("06 / От гипотезы до исправления", "Рисунок 3"),
+                                     ("07 / Контролируемое внедрение", "Рисунок 4")):
+                self.assertTrue(any(chapter in page and caption in page for page in pages), chapter)
 
     def test_sources_pdfs_and_font_are_exact_distribution_inputs(self):
         manifest = json.loads((ROOT / "config/sdist-manifest.json").read_text())["files"]

@@ -209,19 +209,27 @@ class DiagramFlowable(Flowable):
         if kind == "boundary":
             width = (self.width - 50) / 2
             half = (len(self.box_heights) + 1) // 2
+            centers = {}
             for column, indices in enumerate((range(half), range(half, len(self.box_heights)))):
                 y = top - 20
                 x = 10 if column == 0 else self.width - width - 10
                 for index in indices:
                     self._box(index, x, y, width)
+                    centers[self.block["nodes"][index]["id"]] = (x + width / 2, y - self.box_heights[index] / 2)
                     y -= self.box_heights[index] + 14
             self.canv.setDash(3, 3)
             self.canv.setStrokeColor(LEGACY)
             self.canv.line(self.width / 2, 5, self.width / 2, self.height - 5)
             self.canv.setDash()
-            if len(self.box_heights) > 1:
-                self._arrow(width + 12, top - 20 - self.box_heights[0] / 2,
-                            self.width - width - 12, top - 20 - self.box_heights[half] / 2)
+            for edge in self.block.get("edges", []):
+                source_x, source_y = centers[edge["from"]]
+                target_x, target_y = centers[edge["to"]]
+                if source_x < target_x:
+                    self._arrow(width + 12, source_y, self.width - width - 12, target_y)
+                elif source_x > target_x:
+                    self._arrow(self.width - width - 12, source_y, width + 12, target_y)
+                else:
+                    self._arrow(source_x, source_y - 18, target_x, target_y + 18)
         elif kind == "lanes":
             width = (self.width - 50) / 2
             y = top
@@ -364,10 +372,21 @@ def build_document(source: dict, kind: str, output: Path) -> None:
         story.append(Paragraph(escape(title), styles["title"]))
         references = {reference["id"]: reference for reference in content["references"]}
         for chapter in content["chapters"]:
-            story.append(Paragraph(escape(chapter["title"]), styles["chapter"]))
-            for section in chapter["sections"]:
-                story.append(Paragraph(escape(section["heading"]), styles["heading"]))
-                for block in section["blocks"]:
+            first_section = chapter["sections"][0]
+            first_blocks = first_section["blocks"]
+            keep_count = 1 if first_blocks[0]["type"] == "diagram" else (
+                2 if len(first_blocks) > 1 and first_blocks[1]["type"] == "diagram" else 0)
+            beginning = [Paragraph(escape(chapter["title"]), styles["chapter"]),
+                         Paragraph(escape(first_section["heading"]), styles["heading"])]
+            for block in first_blocks[:keep_count]:
+                beginning.extend(render_block(block, styles, references))
+            story.append(KeepTogether(beginning) if keep_count else beginning[0])
+            if not keep_count:
+                story.append(beginning[1])
+            for section_index, section in enumerate(chapter["sections"]):
+                if section_index:
+                    story.append(Paragraph(escape(section["heading"]), styles["heading"]))
+                for block in section["blocks"][keep_count if section_index == 0 else 0:]:
                     story.extend(render_block(block, styles, references))
         if references:
             heading = "Sources and verification date" if language == "en" else "Источники и дата проверки"
