@@ -646,8 +646,8 @@ class CorporateProtocolTests(CorporateFixture):
                              ROOT / f'prompts/corporate-{stage}.md')
             self.assertEqual(Path(argv[argv.index('--settings') + 1]), ROOT / 'config/claude-settings.json')
             self.assertEqual(read_json(Path(argv[argv.index('--mcp-config') + 1])), {'mcpServers': {}})
-            self.assertEqual(json.loads(argv[argv.index('--json-schema') + 1]),
-                             read_json(ROOT / f'config/corporate-{stage}.schema.json'))
+            self.assertEqual(json.loads(argv[argv.index('--json-schema') + 1])['required'],
+                             read_json(ROOT / f'config/corporate-{stage}.schema.json')['required'])
             self.assertEqual(call['env']['CLAUDE_CODE_SKIP_PROMPT_HISTORY'], '1')
             self.assertNotEqual(Path(call['cwd']), self.source)
         for relative in ('private/ai-input/packet.json', 'private/model-output/hunter.json',
@@ -796,6 +796,45 @@ class CorporateProtocolTests(CorporateFixture):
             self.assertFalse(item['additionalProperties'])
             self.assertEqual(set(item['required']), expected)
             self.assertEqual(set(item['properties']), expected)
+
+    def test_corporate_cli_schemas_use_supported_draft_seven(self):
+        for stage in ('hunter', 'verifier'):
+            with self.subTest(stage=stage):
+                command = ai.corporate_claude_command('claude', stage, MODEL, 3)
+                cli_schema = json.loads(command[command.index('--json-schema') + 1])
+                source_schema = read_json(ROOT / f'config/corporate-{stage}.schema.json')
+                self.assertEqual(source_schema['$schema'], 'http://json-schema.org/draft-07/schema#')
+                self.assertNotIn('$schema', cli_schema)
+                self.assertNotIn('$defs', cli_schema)
+                self.assertEqual(cli_schema['required'], source_schema['required'])
+                self.assertFalse(cli_schema['additionalProperties'])
+                self.assertEqual(set(cli_schema['properties']), set(source_schema['properties']))
+                field = 'findings' if stage == 'hunter' else 'verdicts'
+                self.assertEqual(cli_schema['properties'][field]['items']['required'],
+                                 source_schema['properties'][field]['items']['required'])
+                self.assertFalse(cli_schema['properties'][field]['items']['additionalProperties'])
+                self.assertEqual(set(cli_schema['properties'][field]['items']['properties']),
+                                 set(source_schema['properties'][field]['items']['properties']))
+
+                def visit(value):
+                    if isinstance(value, dict):
+                        self.assertFalse({'$schema', '$comment', 'minimum', 'minLength', 'maxItems'} & value.keys())
+                        for nested in value.values():
+                            visit(nested)
+                    elif isinstance(value, list):
+                        for nested in value:
+                            visit(nested)
+
+                visit(cli_schema)
+                if stage == 'hunter':
+                    self.assertEqual(cli_schema['properties']['findings']['items']['properties']['path']['$ref'],
+                                     '#/definitions/nonempty')
+                    self.assertIn('nonempty', cli_schema['definitions'])
+                    self.assertEqual(source_schema['properties']['findings']['maxItems'], 30)
+                    self.assertEqual(source_schema['properties']['findings']['items']['properties']['line']['minimum'], 1)
+                    self.assertEqual(source_schema['definitions']['nonempty']['minLength'], 1)
+                else:
+                    self.assertEqual(source_schema['properties']['verdicts']['maxItems'], 30)
 
 
 if __name__ == '__main__':

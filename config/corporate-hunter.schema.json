@@ -1,5 +1,5 @@
 {
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$schema": "http://json-schema.org/draft-07/schema#",
   "type": "object",
   "additionalProperties": false,
   "required": ["summary", "findings", "limitations"],
@@ -15,18 +15,18 @@
         "properties": {
           "id": {"type": "string", "pattern": "^AI-[0-9]{3}$"},
           "severity": {"type": "string", "enum": ["critical", "high", "medium", "low", "unknown"]},
-          "path": {"$ref": "#/$defs/nonempty"},
+          "path": {"$ref": "#/definitions/nonempty"},
           "line": {"type": "integer", "minimum": 1},
-          "title": {"$ref": "#/$defs/nonempty"},
-          "attacker_control": {"$ref": "#/$defs/nonempty"},
-          "trace": {"$ref": "#/$defs/nonempty"},
-          "impact": {"$ref": "#/$defs/nonempty"},
-          "evidence": {"$ref": "#/$defs/nonempty"},
-          "counterarguments": {"$ref": "#/$defs/nonempty"},
-          "reproduction_plan": {"$ref": "#/$defs/nonempty"}
+          "title": {"$ref": "#/definitions/nonempty"},
+          "attacker_control": {"$ref": "#/definitions/nonempty"},
+          "trace": {"$ref": "#/definitions/nonempty"},
+          "impact": {"$ref": "#/definitions/nonempty"},
+          "evidence": {"$ref": "#/definitions/nonempty"},
+          "counterarguments": {"$ref": "#/definitions/nonempty"},
+          "reproduction_plan": {"$ref": "#/definitions/nonempty"}
         }
       }
     }
   },
-  "$defs": {"nonempty": {"type": "string", "minLength": 1, "pattern": "\\S"}}
+  "definitions": {"nonempty": {"type": "string", "minLength": 1, "pattern": "\\S"}}
 }

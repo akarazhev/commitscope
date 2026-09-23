@@ -11,11 +11,11 @@
     },
     {
       "path": "config/corporate-hunter.schema.json",
-      "sha256": "700104da805e5865ab7068ee4594e48a532029629cfcb45b6e2f2f3621ed2da9"
+      "sha256": "b78db4d507d7a43fe106a57cde2bbad6760abe5d814d39bb9134ba454f3e6fa2"
     },
     {
       "path": "config/corporate-verifier.schema.json",
-      "sha256": "6b65d81003a09ce3c975ea93d9a01f6aa76c3b7f7563d92c4cdd8a7f981fca72"
+      "sha256": "0c640431f87ab5ca6648f5d7789f78513bf2c05a8803615e9db6ac06918adbff"
     },
     {
       "path": "config/empty-mcp.json",

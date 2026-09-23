@@ -260,6 +260,24 @@ def make_corporate_packet(source: Path, report: dict, policy: dict) -> dict:
     }
 
 
+def _corporate_cli_schema(stage: str) -> dict:
+    schema = read_json(current_resource_root() / 'config' / f'corporate-{stage}.schema.json')
+    if schema.get('$schema') != 'http://json-schema.org/draft-07/schema#':
+        raise ReviewError('Corporate Claude schema must use JSON Schema draft-07.')
+    # Claude's structured-output endpoint rejects these constraints. The trusted
+    # resource and local result validators retain and enforce them.
+    unsupported = {'$schema', '$comment', 'minimum', 'minLength', 'maxItems'}
+
+    def project(value):
+        if isinstance(value, dict):
+            return {key: project(item) for key, item in value.items() if key not in unsupported}
+        if isinstance(value, list):
+            return [project(item) for item in value]
+        return value
+
+    return project(schema)
+
+
 def corporate_claude_command(executable: str, stage: str, model: str, max_turns: int) -> list[str]:
     if stage not in ('hunter', 'verifier'):
         raise ReviewError('Unknown corporate AI stage')
@@ -272,7 +290,7 @@ def corporate_claude_command(executable: str, stage: str, model: str, max_turns:
             '--no-session-persistence', '--permission-prompts', 'none',
             '--system-prompt-file', str(resources / 'prompts' / f'corporate-{stage}.md'),
             '--output-format', 'json', '--json-schema',
-            json.dumps(read_json(resources / 'config' / f'corporate-{stage}.schema.json')),
+            json.dumps(_corporate_cli_schema(stage)),
             '--max-turns', str(max_turns), '--model', model]
 
 
