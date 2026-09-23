@@ -43,7 +43,7 @@
     },
     {
       "path": "config/sdist-manifest.json",
-      "sha256": "c49c979953890a9bf436071cff1261a1e4d1a69527604bc5163ea86b5791ba5c"
+      "sha256": "debf1fadba58c9680c1b180763884ea6af40579bbee8ce27662e8b0486bd86d1"
     },
     {
       "path": "config/semgrep.yaml",
