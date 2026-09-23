@@ -2,16 +2,19 @@
 from __future__ import annotations
 
 import importlib.util
+import hashlib
+import hmac
 import json
 import os
 from pathlib import Path
 import pwd
+import secrets
 import stat
 import subprocess
 import sys
 import tempfile
 import unittest
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -44,6 +47,54 @@ def load_fixed_eval_fixture():
     assert spec.loader is not None
     spec.loader.exec_module(module)
     return module
+
+
+def load_fixed_idor_fixture():
+    path = ROOT / "examples/ai-acceptance/idor/fixed/app.py"
+    spec = importlib.util.spec_from_file_location("commitscope_fixed_idor_fixture", path)
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+    return module
+
+
+class FixedIdorFixtureTests(unittest.TestCase):
+    def setUp(self):
+        self.key = secrets.token_hex(32)
+        key_patch = patch.dict(
+            os.environ, {"SYNTHETIC_IDOR_SESSION_SIGNING_KEY": self.key}
+        )
+        key_patch.start()
+        self.addCleanup(key_patch.stop)
+        self.fixture = load_fixed_idor_fixture()
+
+    def signed_session(self, tenant_id):
+        signature = hmac.new(
+            self.key.encode("utf-8"), tenant_id.encode("utf-8"), hashlib.sha256
+        ).hexdigest()
+        return f"{tenant_id}.{signature}"
+
+    def test_verified_session_can_access_own_order(self):
+        order = self.fixture.get_order(self.signed_session("tenant-a"), "order-1")
+        self.assertEqual(order["description"], "Synthetic order A")
+
+    def test_verified_session_cannot_access_other_tenants_order(self):
+        with self.assertRaises(LookupError):
+            self.fixture.get_order(self.signed_session("tenant-a"), "order-2")
+
+    def test_unsigned_malformed_and_tampered_sessions_are_rejected(self):
+        for token in (
+            "tenant-b",
+            "tenant-b.invalid-signature",
+            self.signed_session("tenant-a").replace("tenant-a", "tenant-b", 1),
+        ):
+            with self.subTest(token=token), self.assertRaises(PermissionError):
+                self.fixture.get_order(token, "order-2")
+
+    def test_missing_signing_key_fails_closed(self):
+        with patch.dict(os.environ, {"SYNTHETIC_IDOR_SESSION_SIGNING_KEY": ""}):
+            with self.assertRaises(RuntimeError):
+                self.fixture.get_order(self.signed_session("tenant-a"), "order-1")
 
 
 class FixedEvalFixtureTests(unittest.TestCase):
