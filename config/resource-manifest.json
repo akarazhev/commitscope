@@ -63,7 +63,7 @@
     },
     {
       "path": "examples/ai-acceptance/eval/fixed/app.py",
-      "sha256": "c7980a852393eb192dc3ffc689431d6da30caabc3d5a138ae5e1f786cfd2472a"
+      "sha256": "3e584aba476e796f9ba33598bc92b00e760cd2a592eec1ed37de53ca6bbae2a1"
     },
     {
       "path": "examples/ai-acceptance/eval/vulnerable/app.py",
@@ -71,7 +71,7 @@
     },
     {
       "path": "examples/ai-acceptance/idor/fixed/app.py",
-      "sha256": "87491f6e215f6d947bd5d6bbfbcb9f733b51af857a16a4657dfe64a40a57bf58"
+      "sha256": "a014d230a1c4ac9a5a30a4699dc5f3dad1acaf81efaf2d4b93be9dd8bc133812"
     },
     {
       "path": "examples/ai-acceptance/idor/vulnerable/app.py",
@@ -139,7 +139,7 @@
     },
     {
       "path": "tests/test_ai_acceptance.py",
-      "sha256": "caaed2b32df6c11923f240873236908ebd72aa3a49190efce76e35b221c3dc3b"
+      "sha256": "0cdfe7d87b1452fc6fbe5eea39da57058e7ebd3d4d4c4ddf49f1b9528fef69c5"
     },
     {
       "path": "tests/test_demo_app.py",
