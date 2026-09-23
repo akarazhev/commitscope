@@ -374,18 +374,19 @@ _ACCOUNT_PROTOCOL_KEYS = _ACCOUNT_STRUCTURAL_FIELDS | CORPORATE_CANDIDATE_KEYS |
 })
 
 
-def _redact_account_output(value, usernames: set[str]):
+def _redact_account_output(value, usernames: set[str], *, structural_fields=frozenset()):
     if isinstance(value, str):
         return redact_account_username(value, usernames)
     if isinstance(value, list):
-        return [_redact_account_output(item, usernames) for item in value]
+        return [_redact_account_output(item, usernames, structural_fields=structural_fields) for item in value]
     if isinstance(value, dict):
         clean = {}
         for key, item in value.items():
             clean_key = key if key in _ACCOUNT_PROTOCOL_KEYS else redact_account_username(key, usernames)
             if clean_key in clean:
                 raise ReviewError('Corporate account redaction produced duplicate JSON keys.')
-            clean[clean_key] = item if key in _ACCOUNT_STRUCTURAL_FIELDS else _redact_account_output(item, usernames)
+            clean[clean_key] = item if key in structural_fields else _redact_account_output(
+                item, usernames, structural_fields=structural_fields)
         return clean
     return value
 
@@ -401,7 +402,9 @@ def _redact_corporate_result(envelope: dict, stage: str, model: str, packet: dic
             validate_corporate_verifier(result, ids)
 
     validate(value)
-    clean = _redact_account_output(redact_corporate_value(value, sensitive_values, redact_keys=False), usernames)
+    # Structural locations belong only to the validated schema, never to envelope extras.
+    clean = _redact_account_output(redact_corporate_value(value, sensitive_values, redact_keys=False), usernames,
+                                   structural_fields=_ACCOUNT_STRUCTURAL_FIELDS)
     validate(clean)
     # Keep validated schema keys and envelope constants, not arbitrary model
     # strings. Decision values must remain valid after sanitization as well.

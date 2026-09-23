@@ -375,8 +375,12 @@ class CorporatePrivacyTests(CorporateFixture):
 
     def test_os_username_echo_is_redacted_without_changing_source_paths(self):
         (self.source / 'decision.py').write_text('pass\n')
+        (self.source / 'ci.py').write_text('pass\n')
+        self.config['hunter']['structured_output']['findings'][0]['path'] = 'ci.py'
         self.config['hunter']['structured_output']['summary'] = 'Account ci; decision remains'
         self.config['hunter']['ci'] = 'account-key diagnostic'
+        self.config['hunter']['path'] = '/Users/ci/private'
+        self.config['hunter']['status'] = 'ci'
         self.config['hunter_stderr'] = 'USER=ci; decision remains'
         with patch('sec_review.auth.pwd.getpwuid', return_value=SimpleNamespace(pw_name='ci')):
             result = self.run_review(environment={'USER': 'app.py'})
@@ -385,13 +389,27 @@ class CorporatePrivacyTests(CorporateFixture):
         self.assertEqual(self.calls()[0]['env']['USER'], 'ci')
         packet = read_json(self.out / 'private/ai-input/packet.json')
         self.assertIn('decision.py', [item['path'] for item in packet['files']])
-        self.assertNotIn('ci', read_json(self.out / 'private/model-output/hunter.json'))
+        saved_hunter = read_json(self.out / 'private/model-output/hunter.json')
+        self.assertNotIn('ci', saved_hunter)
+        self.assertNotIn('/Users/ci/private', json.dumps(saved_hunter))
+        self.assertEqual(saved_hunter['status'], '[REDACTED_CORPORATE]')
+        self.assertEqual(saved_hunter['structured_output']['findings'][0]['path'], 'ci.py')
         self.assertIn('decision remains', (self.out / 'private/model-logs/hunter.log').read_text())
         for path in self.out.rglob('*'):
             if path.is_file():
                 content = path.read_text()
                 self.assertNotIn('USER=ci', content, path)
                 self.assertNotIn('Account ci;', content, path)
+
+    def test_failed_model_envelope_does_not_preserve_account_username_in_extra_path(self):
+        self.config['hunter_code'] = 1
+        self.config['hunter']['path'] = '/Users/ci/private'
+        with patch('sec_review.auth.pwd.getpwuid', return_value=SimpleNamespace(pw_name='ci')):
+            result = self.run_review()
+        self.assertEqual(result['ai']['status'], 'failed')
+        for path in self.out.rglob('*'):
+            if path.is_file():
+                self.assertNotIn('/Users/ci/private', path.read_text(), path)
 
     def test_all_source_withheld_for_sensitive_content_prevents_model_call(self):
         (self.source / 'app.py').write_text('# ' + self.echo + '\n')
