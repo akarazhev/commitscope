@@ -3,10 +3,11 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+import pwd
 import tempfile
 
 from .ai import CORPORATE_SECRET_MATERIAL, run_corporate_ai, validate_exact_model
-from .auth import corporate_sensitive_values, redact_corporate_value, validate_ai_options
+from .auth import corporate_sensitive_values, redact_account_username, redact_corporate_value, validate_ai_options
 from .core import ReviewError, digest, file_hash, no_symlinks, now, private_dir, read_json, write_bytes, write_json, write_text
 from .manifest import write_manifest
 from .policy import ReviewRequest
@@ -18,6 +19,8 @@ from .snapshot import export_snapshot
 
 FINDING_FIELDS = frozenset({'id', 'rule_id', 'path', 'line', 'severity', 'status', 'tool',
                             'package', 'installed_version', 'fixed_version'})
+SCANNER_PATH_FIELDS = frozenset({'path', 'File', 'Target', 'FilePath', 'PkgPath',
+                                 'SymlinkFile', 'ArtifactName', 'scanned'})
 PROTOCOL_FIELDS = (FINDING_FIELDS - {'path'}) | frozenset({
     'schema_version', 'project_version', 'run_id', 'head', 'commit_sha', 'snapshot_sha256',
     'sha256', 'raw_sha256', 'policy_sha256', 'name', 'model', 'model_requested', 'subtype',
@@ -106,7 +109,57 @@ def _scanner_semantics(name: str, payload, source: Path) -> tuple[list, dict, ob
     return found, coverage, (identities, coverage, protocol)
 
 
-def _redact_scanner_artifacts(out: Path, report: dict, sensitive_values: set[str]) -> None:
+def _redact_scanner_account(value, username: str, source: Path | None = None,
+                            public_source: Path | None = None, *, path=False):
+    if isinstance(value, str):
+        if path:
+            if source is not None and public_source is not None:
+                prefix = str(source)
+                if value == prefix or value.startswith(prefix + os.sep):
+                    return str(public_source) + value[len(prefix):]
+            if not Path(value).is_absolute():
+                return value
+        return redact_account_username(value, {username})
+    if isinstance(value, list):
+        return [_redact_scanner_account(item, username, source, public_source, path=path) for item in value]
+    if isinstance(value, tuple):
+        return tuple(_redact_scanner_account(item, username, source, public_source, path=path)
+                     for item in value)
+    if isinstance(value, dict):
+        result = {}
+        for key, item in value.items():
+            clean_key = redact_account_username(key, {username})
+            if clean_key in result:
+                raise ReviewError('Account path redaction produced duplicate scanner keys.')
+            result[clean_key] = _redact_scanner_account(
+                item, username, source, public_source, path=key in SCANNER_PATH_FIELDS)
+        return result
+    return value
+
+
+def _redact_report_account_prose(report: dict, username: str) -> None:
+    for scan in report['scanners']:
+        for key in ('reason',):
+            if isinstance(scan.get(key), str):
+                scan[key] = redact_account_username(scan[key], {username})
+        if isinstance(scan.get('coverage'), dict):
+            scan['coverage'] = _redact_scanner_account(scan['coverage'], username)
+        if isinstance(scan.get('database'), dict):
+            scan['database'] = _redact_scanner_account(scan['database'], username)
+    for finding in report['findings']:
+        for key in ('title', 'attacker_control', 'trace', 'impact', 'evidence',
+                    'counterarguments', 'reproduction_plan', 'details'):
+            if isinstance(finding.get(key), str):
+                finding[key] = redact_account_username(finding[key], {username})
+    if isinstance(report.get('error'), str):
+        report['error'] = redact_account_username(report['error'], {username})
+    for tool in report.get('tool_checks', {}).values():
+        if isinstance(tool.get('reported'), str):
+            tool['reported'] = redact_account_username(tool['reported'], {username})
+
+
+def _redact_scanner_artifacts(out: Path, report: dict, sensitive_values: set[str],
+                              username: str, source: Path, public_source: Path) -> None:
     scans = {scan['name']: scan for scan in report['scanners']}
     for path in (out / 'private/scanners').iterdir():
         try:
@@ -126,18 +179,19 @@ def _redact_scanner_artifacts(out: Path, report: dict, sensitive_values: set[str
             try:
                 payload = read_json(path)
             except ReviewError:
-                write_text(path, normalize_evidence(raw_text, sensitive_values))
+                write_text(path, redact_account_username(normalize_evidence(raw_text, sensitive_values), {username}))
             else:
                 scan = scans[path.stem]
                 try:
                     if scan.get('finding_details_withheld_due_to_privacy_collision'):
                         raise ReviewError('Finding details withheld')
-                    clean = normalize_evidence(payload, sensitive_values)
-                    source = Path(report['review']['scanner_source'])
+                    clean = _redact_scanner_account(normalize_evidence(payload, sensitive_values),
+                                                    username, source, public_source)
                     _, _, original = _scanner_semantics(path.stem, payload, source)
-                    found, coverage, sanitized = _scanner_semantics(path.stem, clean, source)
+                    found, coverage, sanitized = _scanner_semantics(path.stem, clean, public_source)
                     expected = [item for item in report['findings'] if item['tool'] == path.stem]
-                    if (original != sanitized or normalize_evidence(corporate_scanner_findings(found), sensitive_values) != expected
+                    public_original = _redact_scanner_account(original, username, source, public_source)
+                    if (public_original != sanitized or normalize_evidence(corporate_scanner_findings(found), sensitive_values) != expected
                             or normalize_evidence(coverage, sensitive_values) != scan.get('coverage')):
                         raise ReviewError('Scanner privacy redaction changed protocol semantics')
                 except (ReviewError, KeyError, ValueError, TypeError):
@@ -145,7 +199,7 @@ def _redact_scanner_artifacts(out: Path, report: dict, sensitive_values: set[str
                     clean = {'error': 'Scanner evidence withheld due to a privacy collision.'}
                 write_json(path, clean)
         else:
-            write_text(path, normalize_evidence(raw_text, sensitive_values))
+            write_text(path, redact_account_username(normalize_evidence(raw_text, sensitive_values), {username}))
     for scan in report['scanners']:
         scan['raw_privacy'] = 'privacy_redacted'
         if 'raw_sha256' in scan:
@@ -188,6 +242,7 @@ def run_review(request: ReviewRequest, *, model: str, timeout: int, max_turns: i
     validate_ai_options('subscription', None, max_turns, timeout)
     if type(scanner_timeout) is not int or not 30 <= scanner_timeout <= 3600:
         raise ReviewError('--timeout must be from 30 to 3600 seconds')
+    account_username = pwd.getpwuid(os.getuid()).pw_name
     # Retain the exact policy bytes: its recorded hash is independently verifiable.
     policy_bytes = request.policy_path.read_bytes()
     if digest(policy_bytes) != request.policy_sha256:
@@ -226,7 +281,13 @@ def run_review(request: ReviewRequest, *, model: str, timeout: int, max_turns: i
         report['error'] = normalize_evidence(str(error))
     out = request.out
     report = _normalize_report(report, sensitive_values)
-    _redact_scanner_artifacts(out, report, sensitive_values)
+    _redact_report_account_prose(report, account_username)
+    scanner_source = Path(report['review']['scanner_source'])
+    public_source = Path(redact_account_username(str(scanner_source), {account_username}))
+    _redact_scanner_artifacts(out, report, sensitive_values, account_username, scanner_source, public_source)
+    report['snapshot']['repo'] = redact_account_username(report['snapshot']['repo'], {account_username})
+    report['review']['policy_path'] = redact_account_username(report['review']['policy_path'], {account_username})
+    report['review']['scanner_source'] = str(public_source)
     scanner_findings = [item for item in report['findings'] if item['tool'] != 'claude']
     private_dir(out / 'evidence')
     for name in ('ai-input', 'model-output', 'model-logs'):

@@ -3,6 +3,7 @@ from contextlib import ExitStack
 import io
 import json
 from pathlib import Path
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
@@ -118,6 +119,50 @@ class ReviewFixture(unittest.TestCase):
 
 
 class CorporateReviewTests(ReviewFixture):
+    def test_os_account_name_is_removed_from_absolute_metadata_and_scanner_paths(self):
+        from sec_review.manifest import verify_review
+        account_root = self.root / 'ci'
+        account_root.mkdir()
+        self.repo = self.repo.rename(account_root / 'repo')
+        self.out = account_root / 'review'
+        self.policy_path = self.policy_path.rename(account_root / 'ci-policy.json')
+        (self.repo / 'ci.py').write_text('pass\n')
+        self.git('add', 'ci.py')
+        self.git('commit', '-qm', 'add legitimate ci.py')
+        self.prepared_env = {'USER': 'ci'}
+        self.hunter['summary'] = 'Account ci completed review'
+
+        def absolute_scanner_path(name, payload):
+            source = self.out / '.work/source'
+            if name == 'semgrep':
+                payload['paths']['scanned'] = [str(source / 'ci.py')]
+            elif name == 'trivy-vuln':
+                payload['Results'][0]['Target'] = str(source / 'requirements.txt')
+        self.scanner_payload_edit = absolute_scanner_path
+        scanner_execute = self.scan_execute
+        def path_diagnostic(*args, **kwargs):
+            result = scanner_execute(*args, **kwargs)
+            if Path(args[0][0]).name == 'trivy' and args[0][args[0].index('--scanners') + 1] == 'vuln':
+                metadata = self.tools / 'cache/trivy/db/metadata.json'
+                database = read_json(metadata)
+                database['CachePath'] = str(account_root / 'private')
+                write_json(metadata, database)
+            return ProcessResult(result.code, result.stdout,
+                                 'Scanner source: ' + str(self.out / '.work/source') + '; USER=ci', result.seconds)
+        self.scan_execute = path_diagnostic
+        with patch('sec_review.auth.pwd.getpwuid', return_value=SimpleNamespace(pw_name='ci')):
+            report = self.run_review()
+        self.assertEqual(report['decision']['exit_code'], 0, report)
+        self.assertEqual(verify_review(self.out)[0], 0)
+        self.assertIn('ci.py', [entry['path'] for entry in report['snapshot']['files']])
+        self.assertIn('ci.py', [item['path'] for item in read_json(self.out / 'private/ai-input/packet.json')['files']])
+        for path in self.out.rglob('*'):
+            if path.is_file():
+                content = path.read_text()
+                self.assertNotIn(str(account_root), content, path)
+                self.assertNotIn('ci-policy.json', content, path)
+                self.assertNotIn('USER=ci', content, path)
+
     def test_short_os_username_echo_is_private_and_review_verifies(self):
         from sec_review.manifest import verify_review
         self.prepared_env = {'USER': 'ci'}
