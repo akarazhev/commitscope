@@ -229,6 +229,7 @@ class AuthOptionsTests(unittest.TestCase):
                      '--no-session-persistence', '--disable-slash-commands'):
             self.assertIn(flag, cmd)
         self.assertEqual(cmd[cmd.index('--tools') + 1], '')
+        self.assertEqual(cmd[cmd.index('--disallowedTools') + 1], 'mcp__*')
         self.assertEqual(cmd[cmd.index('--setting-sources') + 1], '')
 
     def test_api_launch_keeps_bare_and_budget(self):

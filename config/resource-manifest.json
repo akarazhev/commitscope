@@ -3,7 +3,7 @@
   "resources": [
     {
       "path": "config/claude-settings.json",
-      "sha256": "d9a29b8a2ea1245c67c3a6d15060c962d80e505a58a95c59dade61a2f288202d"
+      "sha256": "24b9d90d5e41f1545e115578680b2f8cbf9ead26eac18387980245539edd43e8"
     },
     {
       "path": "config/claude.version",

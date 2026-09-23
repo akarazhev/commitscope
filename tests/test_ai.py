@@ -11,6 +11,7 @@ class AITests(unittest.TestCase):
         for flag in ('--bare','--tools','--strict-mcp-config','--no-session-persistence','--json-schema'):
             self.assertIn(flag,cmd)
         self.assertEqual(cmd[cmd.index('--tools')+1],'')
+        self.assertEqual(cmd[cmd.index('--disallowedTools')+1],'mcp__*')
         self.assertNotIn('--dangerously-skip-permissions',cmd)
     def test_envelope_requires_successful_structured_output(self):
         from sec_review.ai import structured

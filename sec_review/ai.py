@@ -28,7 +28,7 @@ def claude_command(executable: str, stage: str, model: str, budget: float | None
     resources = current_resource_root()
     cmd = [executable, *settings_flags(auth_mode), '-p',
            'Analyze the JSON review packet from stdin using the required schema.',
-           '--tools', '', '--disallowedTools', '*', '--disable-slash-commands',
+           '--tools', '', '--disallowedTools', 'mcp__*', '--disable-slash-commands',
            '--strict-mcp-config', '--mcp-config', str(resources / 'config/empty-mcp.json'),
            '--no-session-persistence',
            '--system-prompt-file', str(resources / 'prompts' / f'{stage}.md'),
@@ -285,7 +285,7 @@ def corporate_claude_command(executable: str, stage: str, model: str, max_turns:
     resources = current_resource_root()
     return [executable, *settings_flags('subscription'), '-p',
             'Analyze the JSON review packet from stdin using the required schema.',
-            '--tools', '', '--disallowedTools', '*', '--disable-slash-commands',
+            '--tools', '', '--disallowedTools', 'mcp__*', '--disable-slash-commands',
             '--strict-mcp-config', '--mcp-config', str(resources / 'config/empty-mcp.json'),
             '--no-session-persistence', '--permission-prompts', 'none',
             '--system-prompt-file', str(resources / 'prompts' / f'corporate-{stage}.md'),

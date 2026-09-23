@@ -635,7 +635,7 @@ class CorporateProtocolTests(CorporateFixture):
             argv = call['argv']
             for flag in ('--safe-mode', '--disable-slash-commands', '--strict-mcp-config', '--no-session-persistence'):
                 self.assertIn(flag, argv)
-            for flag, expected in (('--setting-sources', ''), ('--tools', ''), ('--disallowedTools', '*'),
+            for flag, expected in (('--setting-sources', ''), ('--tools', ''), ('--disallowedTools', 'mcp__*'),
                                    ('--permission-prompts', 'none'), ('--output-format', 'json'),
                                    ('--max-turns', '3'), ('--model', MODEL)):
                 self.assertEqual(argv[argv.index(flag) + 1], expected)
@@ -669,7 +669,8 @@ class CorporateProtocolTests(CorporateFixture):
         settings = read_json(ROOT / 'config/claude-settings.json')
         self.assertTrue(settings['disableAllHooks'])
         self.assertEqual(settings['enabledPlugins'], {})
-        self.assertIn('*', settings['permissions']['deny'])
+        self.assertEqual(settings['permissions']['deny'], ['mcp__*'])
+        self.assertNotIn('StructuredOutput', settings['permissions']['deny'])
 
     def test_packet_is_not_saved_when_account_auth_fails(self):
         self.config['auth']['loggedIn'] = False

@@ -153,7 +153,8 @@ uses the trusted prompt and settings plus:
 
 - `--safe-mode`
 - empty `--setting-sources`
-- `--tools ""` and `--disallowedTools "*"`
+- `--tools ""` disables built-in tools; `--disallowedTools "mcp__*"` denies MCP
+  tools without blocking Claude Code's internal `StructuredOutput` channel
 - `--disable-slash-commands`
 - `--strict-mcp-config` with the trusted empty MCP file
 - `--no-session-persistence`
