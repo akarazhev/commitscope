@@ -43,7 +43,7 @@
     },
     {
       "path": "config/sdist-manifest.json",
-      "sha256": "fafc2333a869f53dddac374bb9259d4c299b2fbfeb7f39bddcff331761216834"
+      "sha256": "2d4dcac7b449f342338c0023a05dfd9de3bbb6e2f0f92b65dc09931501b2f1bd"
     },
     {
       "path": "config/semgrep.yaml",
@@ -110,12 +110,12 @@
       "sha256": "920a8737a1791f55ab27c77b46c83c762413fea64f6b65db68ec18b5ffaf2889"
     },
     {
-      "path": "examples/vulnerable/credentials.txt",
-      "sha256": "e508899557a9356a0c6ffb2a897e0074f904cf30b59bec4c19dbbe557558eed1"
-    },
-    {
       "path": "examples/vulnerable/requirements.txt",
       "sha256": "2e04d00f865942852b556b8dd2e5251932d5e32d107dc3ddf3120e9236a1e37f"
+    },
+    {
+      "path": "examples/vulnerable/synthetic-token-fixture.txt",
+      "sha256": "e508899557a9356a0c6ffb2a897e0074f904cf30b59bec4c19dbbe557558eed1"
     },
     {
       "path": "prompts/corporate-hunter.md",

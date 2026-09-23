@@ -93,8 +93,8 @@ version = {attr = "sec_review.__version__"}
 "share/commitscope/examples/vulnerable" = [
   "examples/vulnerable/Dockerfile",
   "examples/vulnerable/app.py",
-  "examples/vulnerable/credentials.txt",
   "examples/vulnerable/requirements.txt",
+  "examples/vulnerable/synthetic-token-fixture.txt",
 ]
 "share/commitscope/scripts" = [
   "scripts/ai_acceptance.py",

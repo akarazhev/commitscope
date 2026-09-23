@@ -324,8 +324,7 @@ def _include_source(path: Path) -> bool:
         return False
     if path.name.startswith(".env"):
         return False
-    if (path.name.startswith("credentials")
-            and relative.as_posix() != "examples/vulnerable/credentials.txt"):
+    if any(part.casefold().startswith("credentials") for part in relative.parts):
         return False
     if path.suffix == ".tmp" or "raw" in relative.parts or ".raw." in path.name:
         return False

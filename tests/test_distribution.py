@@ -27,8 +27,11 @@ class DistributionTests(unittest.TestCase):
     def test_source_exclusions_apply_to_tracked_and_manifest_declared_candidates(self):
         import sec_review_build
         forbidden = ['.envrc', 'credentials-prod.json', 'reports/report.json', 'capture.raw.json',
-                     'credentials.txt', 'examples/other/credentials.txt']
-        allowed = ['examples/vulnerable/credentials.txt', 'sec_review/app.py']
+                     'credentials.txt', 'examples/other/credentials.txt',
+                     'examples/vulnerable/credentials.txt',
+                     'examples/vulnerable/Credentials-test.txt',
+                     'examples/credentials-backup/data.txt']
+        allowed = ['examples/vulnerable/synthetic-token-fixture.txt', 'sec_review/app.py']
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory).resolve()
             for relative in forbidden + allowed:
@@ -43,6 +46,31 @@ class DistributionTests(unittest.TestCase):
                      mock.patch.object(sec_review_build, '_git_ls_files', return_value=tracked):
                     paths = sec_review_build._source_files()
                     self.assertEqual({path.relative_to(root).as_posix() for path in paths}, set(allowed))
+
+    def test_source_manifest_and_sdist_never_include_credentials_named_paths(self):
+        import sec_review_build
+
+        declared = json.loads((ROOT / sec_review_build.SOURCE_MANIFEST).read_text())['files']
+        self.assertFalse(any(
+            part.casefold().startswith('credentials')
+            for relative in declared for part in Path(relative).parts
+        ))
+        with tempfile.TemporaryDirectory() as directory:
+            sdist = Path(directory) / sec_review_build.build_sdist(directory)
+            with tarfile.open(sdist, 'r:gz') as archive:
+                entries = archive.getnames()
+        self.assertFalse(any(
+            part.casefold().startswith('credentials')
+            for entry in entries for part in Path(entry).parts
+        ))
+
+    def test_ci_archive_inspection_rejects_every_credentials_named_path(self):
+        workflow = (ROOT / '.github/workflows/verify.yml').read_text()
+        self.assertNotIn('allowed_credentials', workflow)
+        self.assertIn(
+            "if any(part.casefold().startswith('credentials') for part in parts):",
+            workflow,
+        )
 
     def test_doctor_help_separates_scanner_diagnostics_from_corporate_readiness(self):
         from sec_review.cli import parser

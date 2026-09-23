@@ -71,10 +71,6 @@ jobs:
               raise SystemExit(f'Expected one wheel and one sdist, found {wheels} and {sdists}')
 
           blocked_dirs = {'.tools', '.runs', '.idea', '.git', '.worktrees'}
-          allowed_credentials = (
-              'examples/vulnerable/credentials.txt',
-              'share/commitscope/examples/vulnerable/credentials.txt',
-          )
 
           def archive_entries(archive):
               if archive.suffix == '.whl':
@@ -94,7 +90,7 @@ jobs:
                   return 'raw report'
               if parts[-1] in ('report.json', 'report.md', 'report.sarif'):
                   return 'generated report'
-              if 'credentials' in parts[-1].lower() and not any(normalized.endswith(path) for path in allowed_credentials):
+              if any(part.casefold().startswith('credentials') for part in parts):
                   return 'credential-like file'
               return ''
 
