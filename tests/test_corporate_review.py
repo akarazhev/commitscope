@@ -152,6 +152,9 @@ class CorporateReviewTests(ReviewFixture):
             'headers["Authorization"] = "' + 'Bearer fixture-report-token-123456"',
             'https://' + 'fixture-user:fixture-password@proxy.invalid/path',
             'ghp_' + 'A' * 24,
+            'API_KEY=fixture-report-secret-123456',
+            'password: fixture-report-secret-123456',
+            'password: Abc!defghijk',
         )
         for form in forms:
             with self.subTest(form=form.split(' ', 1)[0]):
@@ -162,6 +165,12 @@ class CorporateReviewTests(ReviewFixture):
                     'name': form, form: 'fixture metadata'}}]},
                     protected_fields=PROTOCOL_FIELDS, redact_keys=False)
                 self.assertNotIn(form, json.dumps(nested))
+        self.assertEqual(normalize_evidence({'detail': 'password: abcdefghi!JKL'})['detail'],
+                         '[REDACTED_CORPORATE]')
+        self.assertEqual(normalize_evidence({'detail': 'password: abcdefghi!JKL,tail'})['detail'],
+                         '[REDACTED_CORPORATE]')
+        self.assertEqual(normalize_evidence({'detail': 'password: Abcdefgh[123]'})['detail'],
+                         '[REDACTED_CORPORATE]')
         marker = 'fixture-proxy-password'
         nested = normalize_evidence({'scanners': [{'name': 'semgrep',
             'database': {'name': marker, 'model': marker, 'status': marker,

@@ -234,6 +234,12 @@ class CorporateAccountTests(CorporateFixture):
 
 
 class CorporatePacketTests(CorporateFixture):
+    def test_type_annotation_does_not_withhold_source_file(self):
+        from sec_review.ai import make_corporate_packet
+        (self.source / 'app.py').write_text('api_key: Optional[str] = None\npassword: SecretStr\n')
+        packet = make_corporate_packet(self.source, self.report, self.policy)
+        self.assertEqual([item['path'] for item in packet['files']], ['app.py'])
+
     def test_recognizable_credentials_are_withheld_from_source_packet(self):
         from sec_review.ai import make_corporate_packet
         basic = base64.b64encode(b'fixture-user:fixture-password').decode('ascii')
@@ -246,6 +252,12 @@ class CorporatePacketTests(CorporateFixture):
             'https://' + 'fixture-user:fixture-password@proxy.invalid/path',
             'ghp_' + 'A' * 24,
             'api_key="fixture-source-secret-123456"',
+            'API_KEY=fixture-source-secret-123456',
+            'API_KEY=abcdefghijk',
+            'password: fixture-source-secret-123456',
+            'password: Abc!defghijk',
+            'password: Abc!defghijk,tail',
+            'password: Abcdefgh[123]',
         )
         for form in forms:
             with self.subTest(form=form.split(' ', 1)[0]):

@@ -92,6 +92,12 @@ class PolicyTests(unittest.TestCase):
             'xoxb-' + 'F' * 24,
             '-----BEGIN ' + 'PRIVATE KEY-----',
             'api_key="fixture-policy-secret-123456"',
+            'API_KEY=fixture-policy-secret-123456',
+            'API_KEY=abcdefghijk',
+            'password: fixture-policy-secret-123456',
+            'password: Abc!defghijk',
+            'password: Abc!defghijk,tail',
+            'password: Abcdefgh[123]',
         )
         for index, credential in enumerate(credentials):
             with self.subTest(index=index):
@@ -102,6 +108,16 @@ class PolicyTests(unittest.TestCase):
                     self.request()
                 self.assertNotIn(credential, str(caught.exception))
                 self.assertFalse(self.out.exists())
+
+    def test_policy_type_annotations_and_next_line_are_not_credentials(self):
+        for description in ('api_key: Optional[str]', 'api_key: SecretStr',
+                            'password: SecretStr', 'password:\n    required: true',
+                            'password:\nrequired: true'):
+            with self.subTest(description=description):
+                value = copy.deepcopy(POLICY)
+                value['scope']['description'] = description
+                self.write_policy(value)
+                self.assertEqual(self.request().policy, value)
 
     def test_encoded_duplicate_credential_key_never_appears_in_error(self):
         key = 'Authorization: Bearer fixture-escaped-token-123456'
