@@ -83,6 +83,11 @@ external company responsibilities.
 ## Scanner And Analysis Limits
 
 - Semgrep uses a small bundled baseline, not exhaustive whole-program analysis.
+  This source checkout includes five Java rules for direct JDBC SQL concatenation,
+  `Runtime.exec`, `ObjectInputStream.readObject`, disabled hostname verification,
+  and an empty server certificate trust check. A completed Java scan means the
+  enabled rules examined Java files; it does not establish coverage of every Java
+  security weakness. The published 2.4.1 package has no Java rules.
 - Dependency inventory can miss unsupported or unresolved dependencies. Empty SCA is
   incomplete unless an owner explicitly records an audited standard-library-only
   reason with `--allow-empty-sca`.

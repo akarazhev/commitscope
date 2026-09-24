@@ -270,6 +270,86 @@
           "pattern": "$ELEMENT.innerHTML = $VALUE"
         }
       ]
+    },
+    {
+      "id": "sr-java-sql-construction",
+      "languages": [
+        "java"
+      ],
+      "severity": "ERROR",
+      "message": "SQL concatenated at a JDBC execution call: check input control and use bound parameters.",
+      "metadata": {
+        "category": "security",
+        "cwe": "CWE-89",
+        "scope": "baseline candidate; verify reachability and existing defenses"
+      },
+      "pattern-either": [
+        {
+          "pattern": "$STMT.executeQuery($LEFT + $RIGHT)"
+        },
+        {
+          "pattern": "$STMT.executeUpdate($LEFT + $RIGHT)"
+        },
+        {
+          "pattern": "$STMT.execute($LEFT + $RIGHT)"
+        }
+      ]
+    },
+    {
+      "id": "sr-java-process-exec",
+      "languages": [
+        "java"
+      ],
+      "severity": "ERROR",
+      "message": "Runtime process execution: check whether untrusted input controls the command.",
+      "metadata": {
+        "category": "security",
+        "cwe": "CWE-78",
+        "scope": "baseline candidate; verify reachability and existing defenses"
+      },
+      "pattern": "Runtime.getRuntime().exec(...)"
+    },
+    {
+      "id": "sr-java-deserialization",
+      "languages": [
+        "java"
+      ],
+      "severity": "ERROR",
+      "message": "ObjectInputStream deserialization: check whether untrusted bytes can reach this call.",
+      "metadata": {
+        "category": "security",
+        "cwe": "CWE-502",
+        "scope": "baseline candidate; verify reachability and existing defenses"
+      },
+      "pattern": "(ObjectInputStream $INPUT).readObject()"
+    },
+    {
+      "id": "sr-java-tls-hostname-disabled",
+      "languages": [
+        "java"
+      ],
+      "severity": "ERROR",
+      "message": "TLS hostname verification accepts every host.",
+      "metadata": {
+        "category": "security",
+        "cwe": "CWE-297",
+        "scope": "baseline candidate; verify reachability and existing defenses"
+      },
+      "pattern": "HttpsURLConnection.setDefaultHostnameVerifier(($HOSTNAME, $SESSION) -> true)"
+    },
+    {
+      "id": "sr-java-tls-trust-disabled",
+      "languages": [
+        "java"
+      ],
+      "severity": "ERROR",
+      "message": "Empty certificate trust check: verify whether untrusted TLS peers are accepted.",
+      "metadata": {
+        "category": "security",
+        "cwe": "CWE-295",
+        "scope": "baseline candidate; verify reachability and existing defenses"
+      },
+      "pattern": "public void checkServerTrusted(...) {}"
     }
   ]
 }

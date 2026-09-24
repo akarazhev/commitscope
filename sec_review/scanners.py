@@ -2,7 +2,7 @@
 from __future__ import annotations
 from datetime import datetime, timezone
 from pathlib import Path
-from .core import ReviewError, digest, safe_path, read_json, execute, child_env, private_dir, file_hash, write_text, now
+from .core import ReviewError, digest, safe_path, read_json, execute, child_env, private_dir, file_hash, write_bytes, write_text, now
 from .paths import current_resource_root
 from .tools import semgrep_child_env
 
@@ -79,6 +79,18 @@ def parse_trivy(data: object, source: Path, kind: str) -> tuple[list,dict]:
                                       str(item.get('Severity','UNKNOWN')).lower(),item.get('Title',item.get('ID','Misconfiguration'))))
     return result,{'package_count':packages,'target_count':relevant}
 
+def semgrep_command(source: Path, raw: Path, resources: Path, cwd: Path, binary: Path) -> list[str]:
+    # Semgrep prefixes finding IDs with a config path relative to its working directory.
+    # Stage the verified config in the private runner so installed paths containing the
+    # OS account name cannot change finding identities during privacy redaction.
+    staged = private_dir(cwd / 'config') / 'semgrep.yaml'
+    write_bytes(staged, (resources / 'config/semgrep.yaml').read_bytes())
+    return [str(binary), 'scan', '--config', str(staged), '--oss-only',
+            '--json', '--output', str(raw / 'semgrep.json'), '--metrics', 'off', '--disable-version-check',
+            '--disable-nosem', '--no-git-ignore', '--strict', '--jobs', '2', '--timeout', '15',
+            '--max-target-bytes', str(5 * 1024 * 1024), str(source)]
+
+
 def run_scanners(source: Path, out: Path, paths: dict[str,Path], *, tools_root: Path, resources: Path | None = None,
                  timeout: int=360, offline: bool=False, allow_empty_sca: str='', max_db_age_hours: int=72) -> tuple[list,list]:
     resources = resources or current_resource_root()
@@ -90,9 +102,7 @@ def run_scanners(source: Path, out: Path, paths: dict[str,Path], *, tools_root: 
                   '--skip-version-check','--offline-scan','--timeout',str(timeout-5)+'s']
     if offline: trivy_common+=['--skip-db-update','--skip-java-db-update']
     commands={
-      'semgrep':[str(paths['semgrep']),'scan','--config',str(resources/'config/semgrep.yaml'),'--oss-only',
-                  '--json','--output',str(raw/'semgrep.json'),'--metrics','off','--disable-version-check','--disable-nosem',
-                  '--no-git-ignore','--strict','--jobs','2','--timeout','15','--max-target-bytes',str(5*1024*1024),str(source)],
+      'semgrep':semgrep_command(source, raw, resources, cwd, paths['semgrep']),
       'gitleaks':[str(paths['gitleaks']),'dir',str(source),'--config',str(resources/'config/gitleaks.toml'),
                   '--gitleaks-ignore-path',str(empty),'--ignore-gitleaks-allow','--redact=100','--no-banner','--no-color',
                   '--exit-code','10','--report-format','json','--report-path',str(raw/'gitleaks.json'),'--timeout',str(timeout-5)],

@@ -46,6 +46,8 @@ remains available as
 For an independently reviewed local checkout, use
 `pipx install /absolute/path/to/commitscope` instead. Do not assume a changed
 checkout has the same behavior as a published release.
+The published 2.4.1 package has no Java Semgrep rules. Java coverage added in
+this source checkout requires a separately reviewed build until the next release.
 
 Source-checkout commands remain available as `python3 -I review.py <command>`.
 Supported hosts are macOS and glibc Linux on x86_64 or ARM64 with Python 3.11-3.14.
