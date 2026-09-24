@@ -87,7 +87,7 @@ external company responsibilities.
   `Runtime.exec`, `ObjectInputStream.readObject`, disabled hostname verification,
   and an empty server certificate trust check. A completed Java scan means the
   enabled rules examined Java files; it does not establish coverage of every Java
-  security weakness. The published 2.4.1 package has no Java rules.
+  security weakness. These rules ship in the 2.4.2 package.
 - Dependency inventory can miss unsupported or unresolved dependencies. Empty SCA is
   incomplete unless an owner explicitly records an audited standard-library-only
   reason with `--allow-empty-sca`.

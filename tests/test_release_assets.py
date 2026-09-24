@@ -16,8 +16,8 @@ from scripts.verify_release_assets import compare_build, verify
 
 
 class ReleaseAssetTests(unittest.TestCase):
-    tag = "v2.4.1"
-    version = "2.4.1"
+    tag = "v2.4.2"
+    version = "2.4.2"
 
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
@@ -103,7 +103,7 @@ class ReleaseAssetTests(unittest.TestCase):
 
     def test_rejects_non_release_tag(self):
         with self.assertRaises(ValueError):
-            verify(self.directory, "v2.4.1-rc1")
+            verify(self.directory, "v2.4.2-rc1")
 
     def test_rebuild_comparison_accepts_equivalent_contents_with_different_archives(self):
         rebuilt = self.directory / "rebuilt"

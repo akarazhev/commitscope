@@ -17,18 +17,17 @@ training exercise through protected human handoff.
 
 | Document | English | Russian |
 |---|---|---|
-| Methodology | [PDF](https://github.com/akarazhev/commitscope/blob/main/docs/security-review-pdfs/en/security-review-methodology-en.pdf) | [PDF](https://github.com/akarazhev/commitscope/blob/main/docs/security-review-pdfs/ru/security-review-methodology-ru.pdf) |
-| User Guide | [PDF](https://github.com/akarazhev/commitscope/blob/main/docs/security-review-pdfs/en/commitscope-user-guide-en.pdf) | [PDF](https://github.com/akarazhev/commitscope/blob/main/docs/security-review-pdfs/ru/commitscope-user-guide-ru.pdf) |
+| Methodology | [PDF](https://github.com/akarazhev/commitscope/blob/v2.4.2/docs/security-review-pdfs/en/security-review-methodology-en.pdf) | [PDF](https://github.com/akarazhev/commitscope/blob/v2.4.2/docs/security-review-pdfs/ru/security-review-methodology-ru.pdf) |
+| User Guide | [PDF](https://github.com/akarazhev/commitscope/blob/v2.4.2/docs/security-review-pdfs/en/commitscope-user-guide-en.pdf) | [PDF](https://github.com/akarazhev/commitscope/blob/v2.4.2/docs/security-review-pdfs/ru/commitscope-user-guide-ru.pdf) |
 
-The current handouts cover 2.4.1. They were updated after the v2.4.1 release;
-the immutable v2.4.1 source distribution still contains the earlier 2.4.0 PDFs.
+The 2.4.2 handouts are included in the 2.4.2 source distribution.
 
-## Install v2.4.1
+## Install v2.4.2
 
 Install the pinned PyPI version:
 
 ```bash
-pipx install commitscope==2.4.1
+pipx install commitscope==2.4.2
 commitscope preflight
 commitscope bootstrap
 commitscope doctor
@@ -40,14 +39,16 @@ To follow the latest public PyPI release instead:
 pipx install commitscope
 ```
 
-Pin the version for a repeatable corporate rollout. The previous release
-remains available as
+Pin the version for a repeatable corporate rollout. The previous PyPI release
+remains available as `pipx install commitscope==2.4.1`. The older Git tag remains
+available as
 `pipx install "git+https://github.com/akarazhev/commitscope.git@v2.4.0"`.
 For an independently reviewed local checkout, use
 `pipx install /absolute/path/to/commitscope` instead. Do not assume a changed
 checkout has the same behavior as a published release.
-The published 2.4.1 package has no Java Semgrep rules. Java coverage added in
-this source checkout requires a separately reviewed build until the next release.
+Version 2.4.2 includes five bounded Java Semgrep rules. They cover direct JDBC SQL
+concatenation, process execution, Java deserialization, and disabled TLS checks;
+they do not provide exhaustive Java security coverage.
 
 Source-checkout commands remain available as `python3 -I review.py <command>`.
 Supported hosts are macOS and glibc Linux on x86_64 or ARM64 with Python 3.11-3.14.

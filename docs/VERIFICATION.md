@@ -46,7 +46,7 @@ tag or release asset. Real `bootstrap`, `doctor`, and scanner acceptance are sep
 time-dependent checks. Live AI acceptance requires explicit authorization, account
 quota, and source-transfer consent and is not implied by a passing unit suite.
 
-For the unreleased Java baseline, run `tests/test_semgrep_java.py` with
+For the 2.4.2 Java baseline, run `tests/test_semgrep_java.py` with
 `COMMITSCOPE_TEST_SEMGREP` set to the pinned Semgrep executable. Its real-scanner
 check requires all five rules to find the vulnerable Java fixture and none to flag
 the corrected fixture. It also checks that packaged config paths do not enter rule
@@ -65,9 +65,9 @@ Before depending on CommitScope in an environment:
    successful `verify-review` handoff.
 5. Measure known-vulnerable and known-fixed cases before adding any release dependency.
 
-The v2.4.0 tag and GitHub Release were published before these documentation updates;
-unit tests in this source tree do not re-establish hosted CI or live model acceptance.
-Native Windows remains outside scope. Scanner
+The 2.4.2 release still requires hosted CI, live scanner and model checks, and a
+fresh public `pipx` installation to qualify the published artifacts. Unit tests
+alone do not establish those checks. Native Windows remains outside scope. Scanner
 databases, Claude Code behavior, model behavior, and account availability can change.
 
 READY_FOR_HUMAN_REVIEW does not approve a merge or assert that the application is secure.
