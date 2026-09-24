@@ -16,6 +16,8 @@ import zipfile
 MAX_DISTRIBUTION_BYTES = 100 * 1024 * 1024
 MAX_METADATA_BYTES = 1024 * 1024
 MAX_CHECKSUM_BYTES = 1024
+MAX_ARCHIVE_MEMBERS = 10_000
+MAX_UNPACKED_BYTES = 512 * 1024 * 1024
 
 
 def _regular_file(path: Path, maximum: int) -> None:
@@ -99,13 +101,104 @@ def verify(directory: Path, tag: str) -> None:
     _sdist_metadata(sdist, version)
 
 
+def _member_name(name: str) -> None:
+    parts = name.split("/")
+    if (name.startswith("/") or "\\" in name or
+            any(part in ("", ".", "..") for part in parts)):
+        raise ValueError(f"Unsafe archive member name: {name}")
+
+
+def _member_digest(stream, size: int) -> str:
+    digest = hashlib.sha256()
+    remaining = size
+    while remaining:
+        chunk = stream.read(min(1024 * 1024, remaining))
+        if not chunk:
+            raise ValueError("Truncated archive member")
+        digest.update(chunk)
+        remaining -= len(chunk)
+    if stream.read(1):
+        raise ValueError("Archive member exceeds its declared size")
+    return digest.hexdigest()
+
+
+def _archive_contents(path: Path, kind: str) -> dict[str, tuple[str, bool]]:
+    contents: dict[str, tuple[str, bool]] = {}
+    total = 0
+    if kind == "wheel":
+        with zipfile.ZipFile(path) as archive:
+            members = archive.infolist()
+            if len(members) > MAX_ARCHIVE_MEMBERS:
+                raise ValueError("Too many archive members")
+            for member in members:
+                _member_name(member.filename)
+                mode = member.external_attr >> 16
+                file_type = stat.S_IFMT(mode)
+                if (member.is_dir() or file_type not in (0, stat.S_IFREG) or
+                        mode & 0o7000):
+                    raise ValueError(f"Unsafe wheel member: {member.filename}")
+                if member.filename in contents:
+                    raise ValueError(f"Archive has duplicate member: {member.filename}")
+                total += member.file_size
+                if member.file_size > MAX_DISTRIBUTION_BYTES or total > MAX_UNPACKED_BYTES:
+                    raise ValueError("Archive contents exceed size limits")
+                with archive.open(member) as stream:
+                    digest = _member_digest(stream, member.file_size)
+                contents[member.filename] = (digest, bool(mode & 0o111))
+    else:
+        with tarfile.open(path, "r:gz") as archive:
+            members = archive.getmembers()
+            if len(members) > MAX_ARCHIVE_MEMBERS:
+                raise ValueError("Too many archive members")
+            for member in members:
+                _member_name(member.name)
+                if not member.isfile() or member.mode & 0o7000:
+                    raise ValueError(f"Unsafe source member: {member.name}")
+                if member.name in contents:
+                    raise ValueError(f"Archive has duplicate member: {member.name}")
+                total += member.size
+                if member.size > MAX_DISTRIBUTION_BYTES or total > MAX_UNPACKED_BYTES:
+                    raise ValueError("Archive contents exceed size limits")
+                stream = archive.extractfile(member)
+                if stream is None:
+                    raise ValueError(f"Unreadable source member: {member.name}")
+                with stream:
+                    digest = _member_digest(stream, member.size)
+                contents[member.name] = (digest, bool(member.mode & 0o111))
+    return contents
+
+
+def compare_build(directory: Path, rebuilt: Path, tag: str) -> None:
+    if not re.fullmatch(r"v[0-9]+\.[0-9]+\.[0-9]+", tag):
+        raise ValueError("Expected a final vMAJOR.MINOR.PATCH release tag")
+    if not stat.S_ISDIR(rebuilt.lstat().st_mode):
+        raise ValueError("Rebuilt distribution path is not a real directory")
+    version = tag[1:]
+    names = {
+        f"commitscope-{version}-py3-none-any.whl": "wheel",
+        f"commitscope-{version}.tar.gz": "sdist",
+    }
+    if {path.name for path in rebuilt.iterdir()} != set(names):
+        raise ValueError("Rebuild must contain exactly the wheel and source distribution")
+    for name, kind in names.items():
+        original = directory / name
+        replacement = rebuilt / name
+        _regular_file(original, MAX_DISTRIBUTION_BYTES)
+        _regular_file(replacement, MAX_DISTRIBUTION_BYTES)
+        if _archive_contents(original, kind) != _archive_contents(replacement, kind):
+            raise ValueError(f"Release and tagged rebuild have different contents: {name}")
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--tag", required=True)
     parser.add_argument("--dir", type=Path, required=True)
+    parser.add_argument("--compare-dir", type=Path)
     args = parser.parse_args(argv)
     try:
         verify(args.dir, args.tag)
+        if args.compare_dir is not None:
+            compare_build(args.dir, args.compare_dir, args.tag)
     except (ValueError, OSError, UnicodeError, zipfile.BadZipFile, tarfile.TarError) as error:
         print(f"Release asset verification failed: {error}", file=sys.stderr)
         return 1

@@ -12,7 +12,7 @@ import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-from scripts.verify_release_assets import verify
+from scripts.verify_release_assets import compare_build, verify
 
 
 class ReleaseAssetTests(unittest.TestCase):
@@ -105,6 +105,46 @@ class ReleaseAssetTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             verify(self.directory, "v2.4.1-rc1")
 
+    def test_rebuild_comparison_accepts_equivalent_contents_with_different_archives(self):
+        rebuilt = self.directory / "rebuilt"
+        rebuilt.mkdir()
+        with zipfile.ZipFile(rebuilt / self.wheel.name, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+            archive.writestr(
+                f"commitscope-{self.version}.dist-info/METADATA",
+                self.metadata(self.version),
+            )
+        with tarfile.open(rebuilt / self.sdist.name, "w:gz") as archive:
+            payload = self.metadata(self.version).encode()
+            member = tarfile.TarInfo(f"commitscope-{self.version}/PKG-INFO")
+            member.mode = 0o600
+            member.size = len(payload)
+            archive.addfile(member, io.BytesIO(payload))
+        self.assertNotEqual(self.wheel.read_bytes(), (rebuilt / self.wheel.name).read_bytes())
+        self.assertNotEqual(self.sdist.read_bytes(), (rebuilt / self.sdist.name).read_bytes())
+        compare_build(self.directory, rebuilt, self.tag)
+
+    def test_rebuild_comparison_rejects_changed_content(self):
+        rebuilt = self.directory / "rebuilt"
+        rebuilt.mkdir()
+        with zipfile.ZipFile(rebuilt / self.wheel.name, "w") as archive:
+            archive.writestr(
+                f"commitscope-{self.version}.dist-info/METADATA",
+                self.metadata(self.version) + "Changed: yes\n",
+            )
+        (rebuilt / self.sdist.name).write_bytes(self.sdist.read_bytes())
+        with self.assertRaisesRegex(ValueError, "different contents"):
+            compare_build(self.directory, rebuilt, self.tag)
+
+    def test_rebuild_comparison_rejects_duplicate_members(self):
+        rebuilt = self.directory / "rebuilt"
+        rebuilt.mkdir()
+        (rebuilt / self.wheel.name).write_bytes(self.wheel.read_bytes())
+        (rebuilt / self.sdist.name).write_bytes(self.sdist.read_bytes())
+        with zipfile.ZipFile(rebuilt / self.wheel.name, "a") as archive:
+            archive.writestr(f"commitscope-{self.version}.dist-info/METADATA", "duplicate")
+        with self.assertRaisesRegex(ValueError, "duplicate"):
+            compare_build(self.directory, rebuilt, self.tag)
+
 
 class PublishWorkflowTests(unittest.TestCase):
     def test_rebuild_uses_default_archive_epoch(self):
@@ -125,7 +165,7 @@ class PublishWorkflowTests(unittest.TestCase):
         self.assertNotIn("id-token: write", prepare)
         self.assertIn("gh release download", prepare)
         self.assertIn("scripts/verify_release_assets.py", prepare)
-        self.assertIn("cmp release-assets/", prepare)
+        self.assertIn("--compare-dir rebuilt", prepare)
         self.assertIn("needs: prepare", publish)
         self.assertIn("environment: pypi", publish)
         self.assertIn("id-token: write", publish)

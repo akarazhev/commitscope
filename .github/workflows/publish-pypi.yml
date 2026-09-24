@@ -27,15 +27,13 @@ jobs:
         env:
           RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: python -I scripts/verify_release_assets.py --tag "$RELEASE_TAG" --dir release-assets
-      - name: Compare release files with build from tagged source
+      - name: Compare release contents with build from tagged source
         env:
           RELEASE_TAG: ${{ github.event.release.tag_name }}
           SOURCE_DATE_EPOCH: '1577836800'
         run: |
-          version="${RELEASE_TAG#v}"
           python -I scripts/build_dist.py --dist-dir rebuilt
-          cmp release-assets/"commitscope-$version-py3-none-any.whl" rebuilt/"commitscope-$version-py3-none-any.whl"
-          cmp release-assets/"commitscope-$version.tar.gz" rebuilt/"commitscope-$version.tar.gz"
+          python -I scripts/verify_release_assets.py --tag "$RELEASE_TAG" --dir release-assets --compare-dir rebuilt
       - name: Hand verified distributions to the publish job
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
