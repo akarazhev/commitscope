@@ -1,15 +1,16 @@
-# CommitScope 2.4.0 Documents
+# CommitScope 2.4.1 Documents
 
 The active Methodology is a sourced survey of international practice, checked on
 2026-09-23, with qualitative comparisons and the rationale for the local CommitScope
 choice. The User Guide teaches a synthetic end-to-end employee and reviewer journey
-for the 2.4.0 workflow: scanners, mandatory Hunter and Verifier, protected evidence,
+for the 2.4.1 workflow: scanners, mandatory Hunter and Verifier, protected evidence,
 and a human decision. The Starter Kit 1.0 Playbook is prominently labeled **LEGACY** on its first
 page and every footer. It is a concise historical reference, not the current
 procedure or a reproduction of the original kit.
 
-These active handouts postdate the published v2.4.0 tag. This documentation update
-does not rewrite that tag or its release assets.
+These active handouts were updated after the v2.4.1 release. Its immutable source
+distribution still contains the previous 2.4.0 PDF editions. The legacy playbooks
+remain unchanged.
 
 | Edition | English | Russian |
 |---|---|---|

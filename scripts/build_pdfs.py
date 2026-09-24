@@ -336,7 +336,7 @@ def render_block(block: dict, styles: dict, references: dict) -> list:
 def build_document(source: dict, kind: str, output: Path) -> None:
     content = source["documents"][kind]
     language = source["language"]
-    version = source["version"]
+    version = content.get("version", source["version"])
     legacy = content.get("legacy", False)
     accent = LEGACY if legacy else ACCENT
     title = content["title"]
