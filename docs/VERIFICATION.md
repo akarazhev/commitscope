@@ -41,8 +41,8 @@ python3 -I -m unittest discover -s tests -p 'test_acceptance.py' -v
 ```
 
 Protocol tests use controlled doubles and do not make model requests. Package tests
-validate wheel/sdist content and clean installation without proving a public tag or
-public release asset. Real `bootstrap`, `doctor`, and scanner acceptance are separate
+validate wheel/sdist content and clean installation without revalidating the published
+tag or release asset. Real `bootstrap`, `doctor`, and scanner acceptance are separate
 time-dependent checks. Live AI acceptance requires explicit authorization, account
 quota, and source-transfer consent and is not implied by a passing unit suite.
 
@@ -58,8 +58,9 @@ Before depending on CommitScope in an environment:
    successful `verify-review` handoff.
 5. Measure known-vulnerable and known-fixed cases before adding any release dependency.
 
-No public `v2.4.0` tag, GitHub Release, hosted CI result, or live model acceptance is
-claimed merely by this source tree. Native Windows remains outside scope. Scanner
+The v2.4.0 tag and GitHub Release were published before these documentation updates;
+unit tests in this source tree do not re-establish hosted CI or live model acceptance.
+Native Windows remains outside scope. Scanner
 databases, Claude Code behavior, model behavior, and account availability can change.
 
 READY_FOR_HUMAN_REVIEW does not approve a merge or assert that the application is secure.

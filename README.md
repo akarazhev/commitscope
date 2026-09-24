@@ -8,17 +8,35 @@ Verifier, protected evidence, and a human decision. It is a local review tool, n
 a merge-approval service, penetration test, security guarantee, or official
 Anthropic product.
 
-## Install The Reviewed Source
+## Presentation Handouts
 
-No public `v2.4.0` tag is claimed by this checkout. Clone or otherwise obtain the
-reviewed source revision, then install that exact local checkout:
+The methodology surveys international security-review practice as checked on
+2026-09-23, compares approaches against our local workflow constraints, and explains
+the CommitScope choice and its limits. The user guide is a step-by-step synthetic
+training exercise through protected human handoff.
+
+| Document | English | Russian |
+|---|---|---|
+| Methodology | [PDF](docs/security-review-pdfs/en/security-review-methodology-en.pdf) | [PDF](docs/security-review-pdfs/ru/security-review-methodology-ru.pdf) |
+| User Guide | [PDF](docs/security-review-pdfs/en/commitscope-user-guide-en.pdf) | [PDF](docs/security-review-pdfs/ru/commitscope-user-guide-ru.pdf) |
+
+These updated handouts follow the published v2.4.0 tag; this documentation branch
+does not rewrite that tag or its release assets.
+
+## Install v2.4.0
+
+Install the published, pinned tag rather than a moving branch:
 
 ```bash
-pipx install /absolute/path/to/commitscope
+pipx install "git+https://github.com/akarazhev/commitscope.git@v2.4.0"
 commitscope preflight
 commitscope bootstrap
 commitscope doctor
 ```
+
+For an independently reviewed local checkout of the same revision, use
+`pipx install /absolute/path/to/commitscope` instead. Do not assume a changed
+checkout has the same behavior as the published tag.
 
 Source-checkout commands remain available as `python3 -I review.py <command>`.
 Supported hosts are macOS and glibc Linux on x86_64 or ARM64 with Python 3.11-3.14.

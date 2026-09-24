@@ -307,6 +307,24 @@ class PdfTests(unittest.TestCase):
             self.assertEqual(set(source["documents"]), {"methodology", "user-guide", "playbook"})
             self.assertTrue(source["documents"]["playbook"]["legacy"])
 
+    def test_presentation_entry_points_and_legacy_bytes(self):
+        root_readme = (ROOT / "README.md").read_text()
+        pdf_readme = (PDF_ROOT / "README.md").read_text()
+        for language in ("en", "ru"):
+            for kind in ("security-review-methodology", "commitscope-user-guide"):
+                filename = f"{kind}-{language}.pdf"
+                self.assertIn(f"docs/security-review-pdfs/{language}/{filename}", root_readme)
+                self.assertIn(f"{language}/{filename}", pdf_readme)
+        self.assertIn("git+https://github.com/akarazhev/commitscope.git@v2.4.0", root_readme)
+        for relative in ("README.md", "START-HERE.md", "docs/INSTALLATION.md", "docs/VERIFICATION.md"):
+            self.assertNotIn("No public `v2.4.0` tag", (ROOT / relative).read_text(), relative)
+        for language, expected in (
+            ("en", "e238c1cf312360fd69853f32b2f643afa5b0ae7ea78608bae7e6f6a216bfecbe"),
+            ("ru", "3a4d61fb2fe8db2d1052628a9d3b3c540ad941528142667179fde6dad38831b6"),
+        ):
+            legacy = PDF_ROOT / language / f"security-review-playbook-{language}-legacy.pdf"
+            self.assertEqual(hashlib.sha256(legacy.read_bytes()).hexdigest(), expected)
+
     def test_clean_builds_are_deterministic_and_honor_epoch(self):
         script = ROOT / "scripts/build_pdfs.py"
         self.assertTrue(script.is_file())

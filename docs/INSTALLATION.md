@@ -3,17 +3,20 @@
 For the current workflow, begin with [Start Here](../START-HERE.md). CommitScope's
 internal Python package remains `sec_review` for compatibility.
 
-## Install The Reviewed 2.4 Source
+## Install v2.4.0
 
-No public `v2.4.0` tag is claimed by this checkout. Install a locally reviewed exact
-source revision:
+Install the published exact tag, not a moving branch:
 
 ```bash
-pipx install /absolute/path/to/commitscope
+pipx install "git+https://github.com/akarazhev/commitscope.git@v2.4.0"
 commitscope preflight
 commitscope bootstrap
 commitscope doctor
 ```
+
+For an independently reviewed local revision, replace the first command with
+`pipx install /absolute/path/to/commitscope`. The documentation updates in this
+branch postdate v2.4.0 and do not alter its tag or release asset.
 
 For source-checkout operation, use the same revision directly:
 

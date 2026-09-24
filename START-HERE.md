@@ -7,15 +7,18 @@ an older release.
 
 ## 1. Install And Check The Host
 
-No public `v2.4.0` tag is claimed by this checkout. Install the exact reviewed local
-source, or run the matching `python3 -I review.py` entry point from that checkout:
+Install the published v2.4.0 tag. A reviewed local source checkout is an alternative;
+use `python3 -I review.py` from that checkout only when its exact revision is approved:
 
 ```bash
-pipx install /absolute/path/to/commitscope
+pipx install "git+https://github.com/akarazhev/commitscope.git@v2.4.0"
 commitscope preflight
 commitscope bootstrap
 commitscope doctor
 ```
+
+For the full illustrated walkthrough, use the [English guide](docs/security-review-pdfs/en/commitscope-user-guide-en.pdf)
+or [Russian guide](docs/security-review-pdfs/ru/commitscope-user-guide-ru.pdf).
 
 Use macOS or glibc Linux on x86_64/ARM64 with Python 3.11-3.14, Git, venv/pip,
 certificate roots, and approved outbound HTTPS. The scanner bootstrap installs pinned
