@@ -46,6 +46,12 @@ tag or release asset. Real `bootstrap`, `doctor`, and scanner acceptance are sep
 time-dependent checks. Live AI acceptance requires explicit authorization, account
 quota, and source-transfer consent and is not implied by a passing unit suite.
 
+For the unreleased Java baseline, run `tests/test_semgrep_java.py` with
+`COMMITSCOPE_TEST_SEMGREP` set to the pinned Semgrep executable. Its real-scanner
+check requires all five rules to find the vulnerable Java fixture and none to flag
+the corrected fixture. The test is skipped when that executable is unavailable;
+the operator must also confirm actual Java files appear in Semgrep's scanned paths.
+
 ## Operator Acceptance
 
 Before depending on CommitScope in an environment:

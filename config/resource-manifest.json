@@ -43,11 +43,11 @@
     },
     {
       "path": "config/sdist-manifest.json",
-      "sha256": "e894c0b3495fd89bdcc2a8928485713b0445ddcff5df4cc168deaa847ce4d352"
+      "sha256": "98868d867b3fb249b777e14a2d4a244f36ba094cc440ffad3b01a98bdbfe176c"
     },
     {
       "path": "config/semgrep.yaml",
-      "sha256": "47dda4cdd42e449677868e62522fc690d321766ce6682ea6bae1bae0429f8c6c"
+      "sha256": "edc173afe49f88af3330009449213c67e1d2910f339f96151759b5b0c0a85e0e"
     },
     {
       "path": "config/tools.lock.json",

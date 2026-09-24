@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Add a bounded Java Semgrep baseline for JDBC SQL concatenation, process
+  execution, Java deserialization, and disabled TLS hostname/certificate checks.
+  The published 2.4.1 package does not contain these rules.
 - Update the English and Russian methodology and user guide PDFs for the public
   2.4.1 PyPI installation path. The published 2.4.1 distributions retain the
   earlier PDF editions.
