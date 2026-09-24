@@ -11,6 +11,7 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from sec_review.tools import semgrep_child_env
+from sec_review.core import trusted_internal_temp_path
 
 EXPECTED = {
     "sr-java-sql-construction",
@@ -26,6 +27,36 @@ class JavaBaselineTests(unittest.TestCase):
         rules = json.loads((ROOT / "config/semgrep.yaml").read_text())["rules"]
         actual = {rule["id"] for rule in rules if "java" in rule["languages"]}
         self.assertEqual(actual, EXPECTED)
+
+    @unittest.skipUnless(os.environ.get("COMMITSCOPE_TEST_SEMGREP"), "real Semgrep not configured")
+    def test_scanner_command_uses_staged_config_with_stable_rule_ids(self):
+        from sec_review.scanners import semgrep_command
+
+        binary = Path(os.environ["COMMITSCOPE_TEST_SEMGREP"])
+        with tempfile.TemporaryDirectory(
+            dir=trusted_internal_temp_path(Path(tempfile.gettempdir()))
+        ) as directory:
+            root = Path(directory)
+            runner = root / "runner"
+            source = root / "source"
+            raw = root / "raw"
+            home = root / "home"
+            for path in (runner, source, raw, home):
+                path.mkdir()
+            (source / "Vulnerable.java").write_text(
+                "class Vulnerable { void run(String command) throws Exception { "
+                "Runtime.getRuntime().exec(command); } }\n"
+            )
+            command = semgrep_command(source, raw, ROOT, runner, binary)
+            result = subprocess.run(
+                command, cwd=runner, capture_output=True, text=True, timeout=120,
+                env=semgrep_child_env(binary.parent.parent.parent, home),
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            data = json.loads((raw / "semgrep.json").read_text())
+        self.assertFalse(data["errors"], data["errors"])
+        self.assertEqual([item["check_id"] for item in data["results"]],
+                         ["config.sr-java-process-exec"])
 
     @unittest.skipUnless(os.environ.get("COMMITSCOPE_TEST_SEMGREP"), "real Semgrep not configured")
     def test_real_semgrep_finds_vulnerable_java_and_ignores_fixed_java(self):
