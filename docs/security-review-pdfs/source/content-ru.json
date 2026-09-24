@@ -4,9 +4,9 @@
   "documents": {
     "methodology": {
       "id": "methodology",
-      "title": "Методология проверки безопасности | CommitScope 2.4.1",
+      "title": "Методология проверки безопасности | CommitScope 2.4.2",
       "subject": "Мировая практика, критерии компании и локальный процесс проверки",
-      "footer": "CommitScope 2.4.1 | Методология | Риск принимает человек",
+      "footer": "CommitScope 2.4.2 | Методология | Риск принимает человек",
       "references": [
         {
           "id": "S1",
@@ -80,7 +80,7 @@
                 {
                   "id": "m01-choice",
                   "type": "callout",
-                  "text": "Рекомендация: использовать CommitScope 2.4.1 для локального сбора и проверки материалов. Semgrep, Gitleaks, Trivy, независимые Claude Hunter и Verifier, а также разбор человеком обязательны. READY_FOR_HUMAN_REVIEW означает передачу ревьюеру, а не одобрение."
+                  "text": "Рекомендация: использовать CommitScope 2.4.2 для локального сбора и проверки материалов. Semgrep, Gitleaks, Trivy, независимые Claude Hunter и Verifier, а также разбор человеком обязательны. READY_FOR_HUMAN_REVIEW означает передачу ревьюеру, а не одобрение."
                 },
                 {
                   "id": "m01-limits",
@@ -352,7 +352,7 @@
                 {
                   "id": "m05-local",
                   "type": "paragraph",
-                  "text": "Сотрудник выбирает чистый точный коммит и утвержденную политику вне цели. CommitScope экспортирует снимок, выполняет закрепленные Semgrep, Gitleaks и Trivy и сохраняет результаты в закрытом каталоге. Затем ищет распознаваемые секреты и формирует ограниченный пакет исходников. Обновление сканеров и БД - отдельная сетевая зависимость. Успешный фильтр не гарантирует отсутствие неизвестных секретов."
+                  "text": "Сотрудник выбирает чистый точный коммит и утвержденную политику вне цели. CommitScope экспортирует снимок, выполняет закрепленные Semgrep, Gitleaks и Trivy и сохраняет результаты в закрытом каталоге. Затем ищет распознаваемые секреты и формирует ограниченный пакет исходников. Обновление сканеров и БД - отдельная сетевая зависимость. Успешный фильтр не гарантирует отсутствие неизвестных секретов. Версия 2.4.2 добавляет пять ограниченных правил Semgrep для Java: прямую конкатенацию SQL в JDBC, запуск процессов, десериализацию и отключенные проверки TLS. Это не исчерпывающее покрытие Java."
                 },
                 {
                   "id": "trust-boundary",
@@ -576,18 +576,18 @@
           ]
         }
       ],
-      "version": "2.4.1"
+      "version": "2.4.2"
     },
     "user-guide": {
       "id": "user-guide",
-      "title": "CommitScope 2.4.1 | Руководство пользователя",
+      "title": "CommitScope 2.4.2 | Руководство пользователя",
       "subject": "Пошаговая локальная проверка сотрудником и защищенная передача решения человеку",
-      "footer": "CommitScope 2.4.1 | Руководство | Точный коммит, полные этапы, решение человека",
+      "footer": "CommitScope 2.4.2 | Руководство | Точный коммит, полные этапы, решение человека",
       "references": [
         {
           "id": "G1",
-          "title": "CommitScope 2.4.1 на PyPI",
-          "url": "https://pypi.org/project/commitscope/2.4.1/",
+          "title": "CommitScope 2.4.2 на PyPI",
+          "url": "https://pypi.org/project/commitscope/2.4.2/",
           "checked": "2026-09-24"
         },
         {
@@ -673,7 +673,7 @@
                 {
                   "id": "g02-purpose",
                   "type": "paragraph",
-                  "text": "Цель: начать с проверенной версии v2.4.1, а не с изменяющейся ветки. CommitScope поддерживает macOS и Linux с glibc на x86_64/ARM64, Python 3.11-3.14; native Windows не поддерживается. Можно использовать WSL2 с поддерживаемым Linux. Нужны Git, pipx/Python, корневые сертификаты и разрешенный исходящий HTTPS. [G1]",
+                  "text": "Цель: начать с проверенной версии v2.4.2, а не с изменяющейся ветки. CommitScope поддерживает macOS и Linux с glibc на x86_64/ARM64, Python 3.11-3.14; native Windows не поддерживается. Можно использовать WSL2 с поддерживаемым Linux. Нужны Git, pipx/Python, корневые сертификаты и разрешенный исходящий HTTPS. [G1]",
                   "citations": [
                     "G1"
                   ]
@@ -681,12 +681,12 @@
                 {
                   "id": "g02-install-code",
                   "type": "code",
-                  "text": "pipx install commitscope==2.4.1\ncommitscope --version\ncommitscope preflight\ncommitscope bootstrap\ncommitscope doctor"
+                  "text": "pipx install commitscope==2.4.2\ncommitscope --version\ncommitscope preflight\ncommitscope bootstrap\ncommitscope doctor"
                 },
                 {
                   "id": "g02-observe",
                   "type": "paragraph",
-                  "text": "Ожидаемо: версия 2.4.1, успешная проверка условий машины, установка закрепленных Semgrep/Gitleaks/Trivy в состояние CommitScope; doctor проверяет наличие и версии сканеров. Bootstrap скачивает исполняемые файлы и устанавливает зависимости Semgrep; БД Trivy загружается при scan/demo, а не bootstrap. Bootstrap не устанавливает и не запускает целевое приложение. Версии инструментов и БД отражаются в материалах запуска."
+                  "text": "Ожидаемо: версия 2.4.2, успешная проверка условий машины, установка закрепленных Semgrep/Gitleaks/Trivy в состояние CommitScope; doctor проверяет наличие и версии сканеров. Bootstrap скачивает исполняемые файлы и устанавливает зависимости Semgrep; БД Trivy загружается при scan/demo, а не bootstrap. Bootstrap не устанавливает и не запускает целевое приложение. Версии инструментов и БД отражаются в материалах запуска."
                 },
                 {
                   "id": "g02-recover",
@@ -747,12 +747,12 @@
                 {
                   "id": "g04-purpose",
                   "type": "paragraph",
-                  "text": "Цель: потренироваться на включенном синтетическом примере IDOR, а не на коде компании. Команды предполагают, что /protected - утвержденный каталог владельца с правами 0700 вне целевого репозитория; замените его разрешенным абсолютным путем своей машины. Исходники v2.4.1 нужны только для учебного примера и политики. До разрешения владельца не используйте живой репозиторий."
+                  "text": "Цель: потренироваться на включенном синтетическом примере IDOR, а не на коде компании. Команды предполагают, что /protected - утвержденный каталог владельца с правами 0700 вне целевого репозитория; замените его разрешенным абсолютным путем своей машины. Исходники v2.4.2 нужны только для учебного примера и политики. До разрешения владельца не используйте живой репозиторий."
                 },
                 {
                   "id": "g04-source-code",
                   "type": "code",
-                  "text": "git clone --branch v2.4.1 --depth 1 \\\n  https://github.com/akarazhev/commitscope.git \\\n  /protected/commitscope-training-source\ninstall -d -m 700 /protected/training-target\ninstall -d -m 700 /protected/reviews\ncp /protected/commitscope-training-source/examples/ai-acceptance/idor/vulnerable/app.py \\\n  /protected/training-target/app.py\ninstall -m 600 /protected/commitscope-training-source/examples/review-policy.json \\\n  /protected/review-policy.json"
+                  "text": "git clone --branch v2.4.2 --depth 1 \\\n  https://github.com/akarazhev/commitscope.git \\\n  /protected/commitscope-training-source\ninstall -d -m 700 /protected/training-target\ninstall -d -m 700 /protected/reviews\ncp /protected/commitscope-training-source/examples/ai-acceptance/idor/vulnerable/app.py \\\n  /protected/training-target/app.py\ninstall -m 600 /protected/commitscope-training-source/examples/review-policy.json \\\n  /protected/review-policy.json"
                 },
                 {
                   "id": "g04-commit-code",
@@ -1075,7 +1075,7 @@
                 {
                   "id": "g09-final",
                   "type": "paragraph",
-                  "text": "Код выхода 0 сам по себе не является решением о безопасности. GitHub Action и совместимые команды scan/ai дают сканерную либо частичную диагностику; для реального репозитория необходим назначенный ревьюер. Сверяйте руководство с установленным CLI v2.4.1 и периодически перепроверяйте поведение модели и сканеров. [G1] [G2] [G5]",
+                  "text": "Код выхода 0 сам по себе не является решением о безопасности. GitHub Action и совместимые команды scan/ai дают сканерную либо частичную диагностику; для реального репозитория необходим назначенный ревьюер. Сверяйте руководство с установленным CLI v2.4.2 и периодически перепроверяйте поведение модели и сканеров. [G1] [G2] [G5]",
                   "citations": [
                     "G1",
                     "G2",
@@ -1087,7 +1087,7 @@
           ]
         }
       ],
-      "version": "2.4.1"
+      "version": "2.4.2"
     },
     "playbook": {
       "title": "УСТАРЕВШИЙ STARTER KIT 1.0 / Справочный плейбук",

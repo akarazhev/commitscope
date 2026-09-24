@@ -7,12 +7,12 @@ an older release.
 
 ## 1. Install And Check The Host
 
-Install the pinned v2.4.1 package from PyPI. A reviewed local source checkout
+Install the pinned v2.4.2 package from PyPI. A reviewed local source checkout
 is an alternative; use `python3 -I review.py` from that checkout only when its
 exact revision is approved:
 
 ```bash
-pipx install commitscope==2.4.1
+pipx install commitscope==2.4.2
 commitscope preflight
 commitscope bootstrap
 commitscope doctor

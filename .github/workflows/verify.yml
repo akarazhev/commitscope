@@ -78,8 +78,8 @@ jobs:
         run: |
           python -I scripts/build_dist.py --dist-dir dist-a
           python -I scripts/build_dist.py --dist-dir dist-b
-          cmp dist-a/commitscope-2.4.1-py3-none-any.whl dist-b/commitscope-2.4.1-py3-none-any.whl
-          cmp dist-a/commitscope-2.4.1.tar.gz dist-b/commitscope-2.4.1.tar.gz
+          cmp dist-a/commitscope-2.4.2-py3-none-any.whl dist-b/commitscope-2.4.2-py3-none-any.whl
+          cmp dist-a/commitscope-2.4.2.tar.gz dist-b/commitscope-2.4.2.tar.gz
           mv dist-a dist
       - name: Inspect distribution archive contents
         run: |
