@@ -1,6 +1,7 @@
 .tools/
 .runs/
 .DS_Store
+.idea/
 __pycache__/
 *.pyc
 .env
