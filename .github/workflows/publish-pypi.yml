@@ -30,7 +30,7 @@ jobs:
       - name: Compare release files with build from tagged source
         env:
           RELEASE_TAG: ${{ github.event.release.tag_name }}
-          SOURCE_DATE_EPOCH: '1790035200'
+          SOURCE_DATE_EPOCH: '1577836800'
         run: |
           version="${RELEASE_TAG#v}"
           python -I scripts/build_dist.py --dist-dir rebuilt

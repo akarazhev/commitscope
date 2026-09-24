@@ -107,6 +107,12 @@ class ReleaseAssetTests(unittest.TestCase):
 
 
 class PublishWorkflowTests(unittest.TestCase):
+    def test_rebuild_uses_default_archive_epoch(self):
+        import sec_review_build
+
+        workflow = (ROOT / ".github/workflows/publish-pypi.yml").read_text()
+        self.assertIn(f"SOURCE_DATE_EPOCH: '{sec_review_build.TAR_EPOCH}'", workflow)
+
     def test_pypi_publish_has_separate_read_only_preparation_and_oidc_job(self):
         workflow = (ROOT / ".github/workflows/publish-pypi.yml").read_text()
         self.assertIn("types: [published]", workflow)
