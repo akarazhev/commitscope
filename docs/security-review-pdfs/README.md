@@ -1,10 +1,15 @@
 # CommitScope 2.4.0 Documents
 
-The active Methodology and User Guide describe only the 2.4.0 local corporate
-workflow: scanners, mandatory Hunter and Verifier, protected evidence, and a human
-decision. The Starter Kit 1.0 Playbook is prominently labeled **LEGACY** on its first
+The active Methodology is a sourced survey of international practice, checked on
+2026-09-23, with qualitative comparisons and the rationale for the local CommitScope
+choice. The User Guide teaches a synthetic end-to-end employee and reviewer journey
+for the 2.4.0 workflow: scanners, mandatory Hunter and Verifier, protected evidence,
+and a human decision. The Starter Kit 1.0 Playbook is prominently labeled **LEGACY** on its first
 page and every footer. It is a concise historical reference, not the current
 procedure or a reproduction of the original kit.
+
+These active handouts postdate the published v2.4.0 tag. This documentation update
+does not rewrite that tag or its release assets.
 
 | Edition | English | Russian |
 |---|---|---|
@@ -14,8 +19,9 @@ procedure or a reproduction of the original kit.
 
 ## Rebuild
 
-Edit `source/content-en.json` and `source/content-ru.json` together. The JSON defines
-explicit pages and ordered sections. The builder escapes text before PDF layout and
+Edit `source/content-en.json` and `source/content-ru.json` together. Active documents
+use matching chapter, section, block, figure, and citation IDs; the legacy playbooks
+retain explicit pages. The builder escapes text before PDF layout and
 embeds the checked-in Noto Sans font; no system font or network access is needed.
 
 Use Python 3.11-3.14 and the documentation-only dependency `reportlab==4.4.10`.

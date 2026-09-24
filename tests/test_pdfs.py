@@ -1,15 +1,27 @@
 import hashlib
+import copy
 import json
+import importlib.util
 import os
+import re
 from pathlib import Path
 import shutil
 import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import MagicMock
 
 
 ROOT = Path(__file__).resolve().parents[1]
+BUILDER_SPEC = importlib.util.spec_from_file_location("build_pdfs", ROOT / "scripts/build_pdfs.py")
+build_pdfs = importlib.util.module_from_spec(BUILDER_SPEC)
+try:
+    BUILDER_SPEC.loader.exec_module(build_pdfs)
+except ModuleNotFoundError as error:
+    if error.name != "reportlab":
+        raise
+    build_pdfs = None
 PDF_ROOT = ROOT / "docs/security-review-pdfs"
 PDF_NAMES = tuple(
     f"{language}/{name}"
@@ -28,6 +40,253 @@ def run(*args, **kwargs):
 
 
 class PdfTests(unittest.TestCase):
+    @staticmethod
+    def converted_pair():
+        active = {
+            "id": "methodology", "title": "Example", "subject": "Example", "footer": "Example",
+            "references": [{"id": "S1", "title": "NIST SSDF 1.1",
+                            "url": "https://csrc.nist.gov/pubs/sp/800/218/final",
+                            "checked": "2026-09-23"}],
+            "chapters": [{"id": "m01", "title": "Decision", "sections": [{
+                "id": "scope", "heading": "Scope", "blocks": [{"id": "claim",
+                "type": "paragraph", "text": "Reviewed scope [S1].", "citations": ["S1"]}]
+            }]}],
+        }
+        en = {"language": "en", "version": "2.4.0", "documents": {"methodology": active}}
+        ru = copy.deepcopy(en)
+        ru["language"] = "ru"
+        ru["documents"]["methodology"]["chapters"][0]["title"] = "Решение"
+        return en, ru
+
+    @unittest.skipUnless(build_pdfs is not None, "ReportLab required for PDF builder checks")
+    def test_active_source_ids_and_citations_are_validated(self):
+        en, ru = self.converted_pair()
+        build_pdfs.validate_source(en, "en")
+        build_pdfs.validate_pair(en, ru)
+        for change in ("duplicate", "unknown citation", "http URL", "unknown type"):
+            with self.subTest(change=change):
+                bad = copy.deepcopy(en)
+                document = bad["documents"]["methodology"]
+                block = document["chapters"][0]["sections"][0]["blocks"][0]
+                if change == "duplicate":
+                    document["chapters"][0]["sections"][0]["blocks"].append(copy.deepcopy(block))
+                elif change == "unknown citation":
+                    block["citations"] = ["S9"]
+                elif change == "http URL":
+                    document["references"][0]["url"] = "http://example.invalid/source"
+                else:
+                    block["type"] = "missing"
+                with self.assertRaises(ValueError):
+                    build_pdfs.validate_source(bad, "en")
+
+    @unittest.skipUnless(build_pdfs is not None, "ReportLab required for PDF builder checks")
+    def test_english_russian_structure_must_match(self):
+        en, ru = self.converted_pair()
+        ru["documents"]["methodology"]["chapters"][0]["sections"] = []
+        with self.assertRaises(ValueError):
+            build_pdfs.validate_pair(en, ru)
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "pdfs"
+            with self.assertRaises(ValueError):
+                build_pdfs.build_pair(en, ru, output)
+            self.assertFalse(output.exists())
+
+    @unittest.skipUnless(build_pdfs is not None, "ReportLab required for PDF builder checks")
+    @unittest.skipUnless(shutil.which("pdftotext") and shutil.which("pdftoppm"), "Poppler required")
+    def test_semantic_blocks_render_literal_text_wrapped_table_and_figure(self):
+        en, ru = self.converted_pair()
+        label = "Граница доверия между рабочей станцией сотрудника и внешним сервисом Anthropic"
+        for source in (en, ru):
+            document = source["documents"]["methodology"]
+            blocks = document["chapters"][0]["sections"][0]["blocks"]
+            blocks[0]["text"] = "A & B < C [S1]"
+            blocks.extend([
+                {"id": "comparison", "type": "table", "caption": "Table 1. Comparison" if source["language"] == "en" else "Таблица 1. Сравнение",
+                 "headers": ["Criterion", "Result", "Evidence"] if source["language"] == "en" else ["Критерий", "Результат", "Доказательство"],
+                 "rows": [[f"Row {i}", "A long explanatory cell that must wrap instead of shrinking below nine points.", "Auditable observation"] for i in range(30)]},
+                {"id": "wide-comparison", "type": "table", "caption": "Table 2. Wide comparison" if source["language"] == "en" else "Таблица 2. Широкое сравнение",
+                 "headers": ["Option", "Coverage", "Repeatability", "Privacy", "Burden", "Evidence"],
+                 "rows": [["Local", "Combined", "Recorded", "Approved transfer", "Employee time", "Protected run"]]},
+                {"id": "boundary", "type": "diagram", "kind": "boundary",
+                 "caption": "Figure 1. Trust boundary" if source["language"] == "en" else "Рисунок 1. Граница доверия",
+                 "nodes": [{"id": "local", "label": "Employee workstation" if source["language"] == "en" else label},
+                           {"id": "external", "label": "Anthropic service" if source["language"] == "en" else "Сервис Anthropic"}],
+                 "edges": [{"from": "local", "to": "external"}]},
+            ])
+        build_pdfs.pdfmetrics.registerFont(build_pdfs.TTFont("NotoSans", str(PDF_ROOT / "fonts/NotoSans-Regular.ttf")))
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "pdfs"
+            build_pdfs.build_pair(en, ru, output)
+            for language in ("en", "ru"):
+                pdf = output / language / f"security-review-methodology-{language}.pdf"
+                extracted = run("pdftotext", "-layout", str(pdf), "-")
+                self.assertEqual(extracted.returncode, 0, extracted.stderr)
+                self.assertIn("A & B < C", extracted.stdout)
+                self.assertGreaterEqual(extracted.stdout.count("Criterion" if language == "en" else "Критерий"), 2)
+                self.assertIn("Figure 1. Trust boundary" if language == "en" else "Рисунок 1. Граница доверия", extracted.stdout)
+                self.assertIn("https://csrc.nist.gov/pubs/sp/800/218/final", extracted.stdout)
+                self.assertIn("(1/2)", extracted.stdout)
+                self.assertIn("(2/2)", extracted.stdout)
+                for page in extracted.stdout.split("\f"):
+                    if "Wide comparison (1/2)" in page or "Широкое сравнение (1/2)" in page:
+                        self.assertIn("Repeatability", page)
+                self.assertNotIn("\ufffd", extracted.stdout)
+                if language == "ru":
+                    self.assertIn("Граница доверия между", extracted.stdout)
+                preview = Path(directory) / f"{language}-preview"
+                rendered = run("pdftoppm", "-f", "1", "-l", "1", "-r", "120", "-png", "-singlefile", str(pdf), str(preview))
+                self.assertEqual(rendered.returncode, 0, rendered.stderr)
+                self.assertTrue(preview.with_suffix(".png").is_file())
+                if os.environ.get("COMMITSCOPE_PDF_QA_DIR"):
+                    qa = Path(os.environ["COMMITSCOPE_PDF_QA_DIR"])
+                    qa.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(pdf, qa / pdf.name)
+                links = run("pdfinfo", "-url", str(pdf))
+                if links.returncode == 0:
+                    self.assertIn("https://csrc.nist.gov/pubs/sp/800/218/final", links.stdout)
+
+    @unittest.skipUnless(build_pdfs is not None, "ReportLab required for PDF builder checks")
+    def test_decision_diagram_reserves_space_for_four_outcomes(self):
+        block = {"kind": "decision", "nodes": [
+            {"id": "root", "label": "Result"},
+            {"id": "ready", "label": "Ready for review"},
+            {"id": "findings", "label": "Findings require triage"},
+            {"id": "incomplete", "label": "Incomplete"},
+        ]}
+        style = build_pdfs.ParagraphStyle("diagram-test", fontName="Helvetica", fontSize=9, leading=12)
+        diagram = build_pdfs.DiagramFlowable(block, style)
+        diagram.wrap(507, 700)
+        self.assertGreater(diagram.height, diagram.box_heights[0] + max(diagram.box_heights[1:3]) + diagram.box_heights[3] + 30)
+        diagram.canv = MagicMock()
+        diagram._box = lambda *args: None
+        arrows = []
+        diagram._arrow = lambda *args: arrows.append(args)
+        diagram.draw()
+        self.assertEqual(len(arrows), 3)
+        self.assertEqual(arrows[0][1], arrows[1][1])
+        self.assertEqual(arrows[1][1], arrows[2][1])
+
+    @unittest.skipUnless(build_pdfs is not None, "ReportLab required for PDF builder checks")
+    def test_two_column_diagrams_measure_the_drawn_label_width(self):
+        style = build_pdfs.ParagraphStyle("diagram-columns", fontName="Helvetica", fontSize=9.5, leading=13)
+        long_label = "Long Russian-style label with several words describing confidential evidence and reviewer decisions " * 2
+        for kind in ("lanes", "grid"):
+            with self.subTest(kind=kind):
+                block = {"kind": kind, "nodes": [{"id": "one", "label": long_label},
+                                                   {"id": "two", "label": "Short label"}]}
+                diagram = build_pdfs.DiagramFlowable(block, style)
+                diagram.wrap(507, 700)
+                drawn_width = (diagram.width - 50) / 2
+                needed_height = diagram.paragraphs[0].wrap(drawn_width - 20, 1000)[1] + 18
+                self.assertGreaterEqual(diagram.box_heights[0], needed_height)
+
+    @unittest.skipUnless(build_pdfs is not None, "ReportLab required for PDF builder checks")
+    def test_boundary_diagram_draws_both_cross_boundary_flows(self):
+        block = {"kind": "boundary", "nodes": [
+            {"id": "snapshot", "label": "Snapshot"}, {"id": "evidence", "label": "Evidence"},
+            {"id": "hunter", "label": "Hunter"}, {"id": "verifier", "label": "Verifier"},
+        ], "edges": [{"from": "snapshot", "to": "hunter"}, {"from": "evidence", "to": "verifier"}]}
+        style = build_pdfs.ParagraphStyle("boundary-test", fontName="Helvetica", fontSize=9, leading=12)
+        diagram = build_pdfs.DiagramFlowable(block, style)
+        diagram.wrap(507, 700)
+        diagram.canv = MagicMock()
+        diagram._box = lambda *args: None
+        arrows = []
+        diagram._arrow = lambda *args: arrows.append(args)
+        diagram.draw()
+        self.assertEqual(len(arrows), 2)
+
+    @unittest.skipUnless(build_pdfs is not None, "ReportLab required for PDF builder checks")
+    @unittest.skipUnless(shutil.which("pdftotext"), "Poppler required")
+    def test_methodology_has_sourced_bilingual_argument_and_figures(self):
+        sources = [json.loads((PDF_ROOT / f"source/content-{language}.json").read_text()) for language in ("en", "ru")]
+        build_pdfs.validate_pair(*sources)
+        expected_figures = {"practice-map", "comparison", "trust-boundary", "finding-lifecycle", "rollout"}
+        for source in sources:
+            language = source["language"]
+            document = source["documents"]["methodology"]
+            self.assertEqual([chapter["id"] for chapter in document["chapters"]], [f"m{i:02d}" for i in range(1, 9)])
+            self.assertTrue({f"S{i}" for i in range(1, 8)}.issubset({ref["id"] for ref in document["references"]}))
+            blocks = [block for chapter in document["chapters"] for section in chapter["sections"] for block in section["blocks"]]
+            self.assertTrue(expected_figures.issubset({block["id"] for block in blocks}))
+            boundary = next(block for block in blocks if block["id"] == "trust-boundary")
+            outgoing = {edge["from"] for edge in boundary["edges"]}
+            self.assertFalse(any("private/" in node["label"] for node in boundary["nodes"] if node["id"] in outgoing))
+            self.assertFalse(re.search(r"\b\d+(?:\.\d+)?%|\$\d+", json.dumps(document, ensure_ascii=False)))
+            if language == "ru":
+                self.assertIn("проверка и оспаривание гипотез", json.dumps(document, ensure_ascii=False))
+                self.assertNotIn("вызов гипотез", json.dumps(document, ensure_ascii=False))
+            pdf = PDF_ROOT / language / f"security-review-methodology-{language}.pdf"
+            extracted = run("pdftotext", "-layout", str(pdf), "-")
+            self.assertEqual(extracted.returncode, 0, extracted.stderr)
+            self.assertIn("2026-09-23", extracted.stdout)
+            self.assertIn("Figure 1" if language == "en" else "Рисунок 1", extracted.stdout)
+            self.assertIn("https://csrc.nist.gov/pubs/sp/800/218/final", extracted.stdout)
+            pages = extracted.stdout.split("\f")
+            for chapter, caption in (("02 / International practice", "Figure 1"),
+                                     ("05 / Architecture and trust", "Figure 2"),
+                                     ("06 / From hypothesis to fix", "Figure 3"),
+                                     ("07 / Controlled adoption", "Figure 4")) if language == "en" else (
+                                     ("02 / Мировая практика", "Рисунок 1"),
+                                     ("05 / Архитектура и доверие", "Рисунок 2"),
+                                     ("06 / От гипотезы до исправления", "Рисунок 3"),
+                                     ("07 / Контролируемое внедрение", "Рисунок 4")):
+                self.assertTrue(any(chapter in page and caption in page for page in pages), chapter)
+
+    @unittest.skipUnless(build_pdfs is not None, "ReportLab required for PDF builder checks")
+    @unittest.skipUnless(shutil.which("pdftotext"), "Poppler required")
+    def test_user_guide_teaches_complete_tagged_local_review(self):
+        sources = [json.loads((PDF_ROOT / f"source/content-{language}.json").read_text()) for language in ("en", "ru")]
+        build_pdfs.validate_pair(*sources)
+        for source in sources:
+            language = source["language"]
+            document = source["documents"]["user-guide"]
+            self.assertEqual([chapter["id"] for chapter in document["chapters"]], [f"g{i:02d}" for i in range(1, 10)])
+            blocks = [block for chapter in document["chapters"] for section in chapter["sections"] for block in section["blocks"]]
+            self.assertTrue({"roles", "timeline", "directory", "decision"}.issubset({block["id"] for block in blocks}))
+            self.assertEqual(next(block for block in blocks if block["id"] == "directory")["kind"], "grid")
+            example = next(block for block in blocks if block["id"] == "g06-example")
+            for required in ("app.py:9-11", "AUTH-001", "tenant-a", "tenant-b"):
+                self.assertIn(required, example["text"])
+            self.assertIn("illustrative" if language == "en" else "иллюстративный", example["text"].lower())
+            install = next(block for block in blocks if block["id"] == "g02-observe")["text"]
+            self.assertIn("Trivy database" if language == "en" else "БД Trivy", install)
+            self.assertIn("presence and version" if language == "en" else "наличие и версии", install)
+            pdf = PDF_ROOT / language / f"commitscope-user-guide-{language}.pdf"
+            extracted = run("pdftotext", "-layout", str(pdf), "-")
+            self.assertEqual(extracted.returncode, 0, extracted.stderr)
+            if language == "ru":
+                self.assertTrue(any("Иллюстративный синтетический пример" in page
+                                    and "07 / Защита и передача" in page
+                                    for page in extracted.stdout.split("\f")))
+            prose = json.dumps(document, ensure_ascii=False)
+            commands = "\n".join(block["text"] for block in blocks if block["type"] == "code")
+            for required in ("git+https://github.com/akarazhev/commitscope.git@v2.4.0", "--auth account",
+                             "--allow-code-upload", "APPROVED_EXACT_MODEL_ID", "--out /protected/reviews/",
+                             "verify-review", "READY_FOR_HUMAN_REVIEW", "FINDINGS_REQUIRE_TRIAGE", "INCOMPLETE"):
+                self.assertIn(required, prose, required)
+            self.assertRegex(commands, r"--ref [0-9a-f]{40}(?![0-9a-f])")
+            self.assertNotIn("--ref HEAD", commands)
+            self.assertNotIn("--auth api", commands)
+            self.assertNotIn("ANTHROPIC_API_KEY=", commands)
+            self.assertNotIn("No public v2.4.0 tag", prose)
+            self.assertNotIn("не заявляет наличие публичного тега", prose)
+            pdf = PDF_ROOT / language / f"commitscope-user-guide-{language}.pdf"
+            extracted = run("pdftotext", "-layout", str(pdf), "-")
+            self.assertEqual(extracted.returncode, 0, extracted.stderr)
+            self.assertIn("Figure 1" if language == "en" else "Рисунок 1", extracted.stdout)
+            self.assertIn("v2.4.0", extracted.stdout)
+            pages = [page for page in extracted.stdout.split("\f") if page.strip()]
+            self.assertIn("01 /", pages[0])
+            self.assertIn("Figure 1" if language == "en" else "Рисунок 1", pages[0])
+            self.assertIn("[G1]", pages[-1])
+            self.assertIn("[G5]", pages[-1])
+            self.assertTrue(any("git clone --branch v2.4.0" in page and
+                                "/protected/review-policy.json" in page for page in pages))
+            for chapter, figure in (("05 /", "Figure 2" if language == "en" else "Рисунок 2"),
+                                    ("07 /", "Figure 4" if language == "en" else "Рисунок 4")):
+                self.assertTrue(any(chapter in page and figure in page for page in pages), chapter)
+
     def test_sources_pdfs_and_font_are_exact_distribution_inputs(self):
         manifest = json.loads((ROOT / "config/sdist-manifest.json").read_text())["files"]
         expected = list(PDF_NAMES) + [
@@ -90,6 +349,24 @@ class PdfTests(unittest.TestCase):
             self.assertEqual(source["language"], language)
             self.assertEqual(set(source["documents"]), {"methodology", "user-guide", "playbook"})
             self.assertTrue(source["documents"]["playbook"]["legacy"])
+
+    def test_presentation_entry_points_and_legacy_bytes(self):
+        root_readme = (ROOT / "README.md").read_text()
+        pdf_readme = (PDF_ROOT / "README.md").read_text()
+        for language in ("en", "ru"):
+            for kind in ("security-review-methodology", "commitscope-user-guide"):
+                filename = f"{kind}-{language}.pdf"
+                self.assertIn(f"docs/security-review-pdfs/{language}/{filename}", root_readme)
+                self.assertIn(f"{language}/{filename}", pdf_readme)
+        self.assertIn("git+https://github.com/akarazhev/commitscope.git@v2.4.0", root_readme)
+        for relative in ("README.md", "START-HERE.md", "docs/INSTALLATION.md", "docs/VERIFICATION.md"):
+            self.assertNotIn("No public `v2.4.0` tag", (ROOT / relative).read_text(), relative)
+        for language, expected in (
+            ("en", "e238c1cf312360fd69853f32b2f643afa5b0ae7ea78608bae7e6f6a216bfecbe"),
+            ("ru", "3a4d61fb2fe8db2d1052628a9d3b3c540ad941528142667179fde6dad38831b6"),
+        ):
+            legacy = PDF_ROOT / language / f"security-review-playbook-{language}-legacy.pdf"
+            self.assertEqual(hashlib.sha256(legacy.read_bytes()).hexdigest(), expected)
 
     def test_clean_builds_are_deterministic_and_honor_epoch(self):
         script = ROOT / "scripts/build_pdfs.py"
