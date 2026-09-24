@@ -148,6 +148,14 @@ class PdfTests(unittest.TestCase):
         diagram = build_pdfs.DiagramFlowable(block, style)
         diagram.wrap(507, 700)
         self.assertGreater(diagram.height, diagram.box_heights[0] + max(diagram.box_heights[1:3]) + diagram.box_heights[3] + 30)
+        diagram.canv = MagicMock()
+        diagram._box = lambda *args: None
+        arrows = []
+        diagram._arrow = lambda *args: arrows.append(args)
+        diagram.draw()
+        self.assertEqual(len(arrows), 3)
+        self.assertEqual(arrows[0][1], arrows[1][1])
+        self.assertEqual(arrows[1][1], arrows[2][1])
 
     def test_boundary_diagram_draws_both_cross_boundary_flows(self):
         block = {"kind": "boundary", "nodes": [
@@ -196,6 +204,45 @@ class PdfTests(unittest.TestCase):
                                      ("06 / От гипотезы до исправления", "Рисунок 3"),
                                      ("07 / Контролируемое внедрение", "Рисунок 4")):
                 self.assertTrue(any(chapter in page and caption in page for page in pages), chapter)
+
+    @unittest.skipUnless(shutil.which("pdftotext"), "Poppler required")
+    def test_user_guide_teaches_complete_tagged_local_review(self):
+        sources = [json.loads((PDF_ROOT / f"source/content-{language}.json").read_text()) for language in ("en", "ru")]
+        build_pdfs.validate_pair(*sources)
+        for source in sources:
+            language = source["language"]
+            document = source["documents"]["user-guide"]
+            self.assertEqual([chapter["id"] for chapter in document["chapters"]], [f"g{i:02d}" for i in range(1, 10)])
+            blocks = [block for chapter in document["chapters"] for section in chapter["sections"] for block in section["blocks"]]
+            self.assertTrue({"roles", "timeline", "directory", "decision"}.issubset({block["id"] for block in blocks}))
+            self.assertEqual(next(block for block in blocks if block["id"] == "directory")["kind"], "grid")
+            prose = json.dumps(document, ensure_ascii=False)
+            commands = "\n".join(block["text"] for block in blocks if block["type"] == "code")
+            for required in ("git+https://github.com/akarazhev/commitscope.git@v2.4.0", "--auth account",
+                             "--allow-code-upload", "APPROVED_EXACT_MODEL_ID", "--out /protected/reviews/",
+                             "verify-review", "READY_FOR_HUMAN_REVIEW", "FINDINGS_REQUIRE_TRIAGE", "INCOMPLETE"):
+                self.assertIn(required, prose, required)
+            self.assertRegex(commands, r"--ref [0-9a-f]{40}(?![0-9a-f])")
+            self.assertNotIn("--ref HEAD", commands)
+            self.assertNotIn("--auth api", commands)
+            self.assertNotIn("ANTHROPIC_API_KEY=", commands)
+            self.assertNotIn("No public v2.4.0 tag", prose)
+            self.assertNotIn("не заявляет наличие публичного тега", prose)
+            pdf = PDF_ROOT / language / f"commitscope-user-guide-{language}.pdf"
+            extracted = run("pdftotext", "-layout", str(pdf), "-")
+            self.assertEqual(extracted.returncode, 0, extracted.stderr)
+            self.assertIn("Figure 1" if language == "en" else "Рисунок 1", extracted.stdout)
+            self.assertIn("v2.4.0", extracted.stdout)
+            pages = [page for page in extracted.stdout.split("\f") if page.strip()]
+            self.assertIn("01 /", pages[0])
+            self.assertIn("Figure 1" if language == "en" else "Рисунок 1", pages[0])
+            self.assertIn("[G1]", pages[-1])
+            self.assertIn("[G5]", pages[-1])
+            self.assertTrue(any("git clone --branch v2.4.0" in page and
+                                "/protected/review-policy.json" in page for page in pages))
+            for chapter, figure in (("05 /", "Figure 2" if language == "en" else "Рисунок 2"),
+                                    ("07 /", "Figure 4" if language == "en" else "Рисунок 4")):
+                self.assertTrue(any(chapter in page and figure in page for page in pages), chapter)
 
     def test_sources_pdfs_and_font_are_exact_distribution_inputs(self):
         manifest = json.loads((ROOT / "config/sdist-manifest.json").read_text())["files"]

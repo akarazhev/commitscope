@@ -15,7 +15,7 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
-from reportlab.platypus import Flowable, KeepTogether, PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+from reportlab.platypus import CondPageBreak, Flowable, KeepTogether, PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -25,7 +25,7 @@ INK = colors.HexColor("#202A31")
 ACCENT = colors.HexColor("#087D76")
 LEGACY = colors.HexColor("#8E332C")
 BLOCK_TYPES = {"paragraph", "callout", "code", "table", "diagram"}
-DIAGRAM_KINDS = {"flow", "boundary", "lanes", "cycle", "decision"}
+DIAGRAM_KINDS = {"flow", "boundary", "lanes", "grid", "cycle", "decision"}
 
 
 def _nonempty(value: object, label: str) -> str:
@@ -163,7 +163,7 @@ class DiagramFlowable(Flowable):
         if kind == "boundary":
             half = (len(self.box_heights) + 1) // 2
             self.height = max(sum(self.box_heights[:half]), sum(self.box_heights[half:])) + max(0, half - 1) * 14 + 38
-        elif kind == "lanes":
+        elif kind in {"lanes", "grid"}:
             rows = [self.box_heights[index:index + 2] for index in range(0, len(self.box_heights), 2)]
             self.height = sum(max(row) for row in rows) + max(0, len(rows) - 1) * 20 + 20
         elif kind == "decision" and len(self.box_heights) > 1:
@@ -230,7 +230,7 @@ class DiagramFlowable(Flowable):
                     self._arrow(self.width - width - 12, source_y, width + 12, target_y)
                 else:
                     self._arrow(source_x, source_y - 18, target_x, target_y + 18)
-        elif kind == "lanes":
+        elif kind in {"lanes", "grid"}:
             width = (self.width - 50) / 2
             y = top
             for first in range(0, len(self.box_heights), 2):
@@ -239,7 +239,7 @@ class DiagramFlowable(Flowable):
                 for index in row:
                     x = 10 if index % 2 == 0 else self.width - width - 10
                     self._box(index, x, y, width)
-                if first + 2 < len(self.box_heights):
+                if kind == "lanes" and first + 2 < len(self.box_heights):
                     self._arrow(self.width / 2, y - row_height - 2,
                                 self.width / 2, y - row_height - 17)
                 y -= row_height + 20
@@ -247,14 +247,15 @@ class DiagramFlowable(Flowable):
             root_width = self.width - 50
             self._box(0, 25, top, root_width)
             branch_width = (self.width - 50) / 2
-            previous_bottom = top - self.box_heights[0]
+            root_bottom = top - self.box_heights[0]
+            previous_bottom = root_bottom
             for first in range(1, len(self.box_heights), 2):
                 row = list(range(first, min(first + 2, len(self.box_heights))))
                 branch_top = previous_bottom - 34
                 for index in row:
                     x = (self.width - branch_width) / 2 if len(row) == 1 else (10 if index == first else self.width - branch_width - 10)
                     self._box(index, x, branch_top, branch_width)
-                    self._arrow(self.width / 2, previous_bottom - 3, x + branch_width / 2, branch_top + 3)
+                    self._arrow(self.width / 2, root_bottom - 3, x + branch_width / 2, branch_top + 3)
                 previous_bottom = branch_top - max(self.box_heights[index] for index in row)
         else:
             width = self.width - 50
@@ -287,7 +288,7 @@ def render_callout(block: dict, styles: dict, references: dict) -> list:
 
 def render_code(block: dict, styles: dict, references: dict) -> list:
     markup = "<br/>".join(escape(line).replace(" ", "&#160;") for line in block["text"].splitlines())
-    return [Paragraph(markup, styles["code"])]
+    return [KeepTogether([Paragraph(markup, styles["code"])])]
 
 
 def render_table(block: dict, styles: dict, references: dict) -> list:
@@ -341,7 +342,7 @@ def build_document(source: dict, kind: str, output: Path) -> None:
     destination = output / language / filename
     destination.parent.mkdir(parents=True, exist_ok=True)
     styles = {
-        "title": ParagraphStyle("title", fontName="NotoSans", fontSize=25, leading=32, textColor=INK, spaceAfter=16),
+        "title": ParagraphStyle("title", fontName="NotoSans", fontSize=25, leading=32, textColor=INK, spaceAfter=16, keepWithNext=True),
         "heading": ParagraphStyle("heading", fontName="NotoSans", fontSize=13, leading=18, textColor=accent, spaceBefore=13, spaceAfter=7, keepWithNext=True),
         "body": ParagraphStyle("body", fontName="NotoSans", fontSize=10, leading=15, textColor=INK, spaceAfter=9),
         "code": ParagraphStyle("code", fontName="NotoSans", fontSize=8.5, leading=13, textColor=INK, backColor=colors.HexColor("#F0F4F5"), borderPadding=9, spaceBefore=6, spaceAfter=13, alignment=TA_LEFT),
@@ -374,8 +375,12 @@ def build_document(source: dict, kind: str, output: Path) -> None:
         for chapter in content["chapters"]:
             first_section = chapter["sections"][0]
             first_blocks = first_section["blocks"]
-            keep_count = 1 if first_blocks[0]["type"] == "diagram" else (
-                2 if len(first_blocks) > 1 and first_blocks[1]["type"] == "diagram" else 0)
+            if kind == "user-guide":
+                lead_types = {block["type"] for block in first_blocks[:2]}
+                reserve = 550 if "diagram" in lead_types else 400 if "table" in lead_types else 360
+                story.append(CondPageBreak(reserve))
+            keep_count = 0 if kind == "user-guide" else (1 if first_blocks[0]["type"] == "diagram" else (
+                2 if len(first_blocks) > 1 and first_blocks[1]["type"] == "diagram" else 0))
             beginning = [Paragraph(escape(chapter["title"]), styles["chapter"]),
                          Paragraph(escape(first_section["heading"]), styles["heading"])]
             for block in first_blocks[:keep_count]:
@@ -390,12 +395,13 @@ def build_document(source: dict, kind: str, output: Path) -> None:
                     story.extend(render_block(block, styles, references))
         if references:
             heading = "Sources and verification date" if language == "en" else "Источники и дата проверки"
-            story.append(Paragraph(heading, styles["chapter"]))
+            reference_story = [Paragraph(heading, styles["chapter"])]
             for reference in references.values():
                 url = escape(reference["url"], {'"': "&quot;"})
                 title_text = escape(reference["title"])
                 markup = f"[{escape(reference['id'])}] {title_text}. <link href=\"{url}\" color=\"#087D76\">{url}</link> ({escape(reference['checked'])})"
-                story.append(Paragraph(markup, styles["body"]))
+                reference_story.append(Paragraph(markup, styles["body"]))
+            story.extend([KeepTogether(reference_story)] if kind == "user-guide" else reference_story)
     else:
         for index, page in enumerate(content["pages"]):
             if index:

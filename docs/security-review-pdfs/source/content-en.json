@@ -578,96 +578,504 @@
       ]
     },
     "user-guide": {
-      "title": "CommitScope User Guide 2.4.0",
-      "subject": "Required scanners, Hunter/Verifier, states, and local protected handoff",
-      "footer": "CommitScope 2.4.0 | User Guide | Local corporate workflow",
-      "pages": [
+      "id": "user-guide",
+      "title": "CommitScope 2.4.0 | User Guide",
+      "subject": "Step-by-step local employee review and protected human handoff",
+      "footer": "CommitScope 2.4.0 | User Guide | Exact commit, complete stages, human decision",
+      "references": [
         {
-          "title": "CommitScope User Guide",
+          "id": "G1",
+          "title": "CommitScope v2.4.0 release",
+          "url": "https://github.com/akarazhev/commitscope/releases/tag/v2.4.0",
+          "checked": "2026-09-23"
+        },
+        {
+          "id": "G2",
+          "title": "Claude Code advanced setup and installation",
+          "url": "https://code.claude.com/docs/en/setup",
+          "checked": "2026-09-23"
+        },
+        {
+          "id": "G3",
+          "title": "Claude Code authentication",
+          "url": "https://code.claude.com/docs/en/iam",
+          "checked": "2026-09-23"
+        },
+        {
+          "id": "G4",
+          "title": "Claude Code data usage",
+          "url": "https://code.claude.com/docs/en/data-usage",
+          "checked": "2026-09-23"
+        },
+        {
+          "id": "G5",
+          "title": "Claude Code security and untrusted content",
+          "url": "https://code.claude.com/docs/en/security",
+          "checked": "2026-09-23"
+        }
+      ],
+      "chapters": [
+        {
+          "id": "g01",
+          "title": "01 / One complete review",
           "sections": [
             {
-              "heading": "2.4.0 / Prepare a trusted installation",
-              "paragraphs": [
-                "Use a reviewed CommitScope checkout separate from the application. Supported hosts: macOS or glibc Linux, x86_64/ARM64, Python 3.11-3.14. Native Windows is outside scope; use supported Linux under WSL2. Prerequisites include Git, venv/pip, certificate roots, and approved outbound HTTPS.",
-                "No public v2.4.0 tag or release is claimed by this checkout. Install the exact reviewed source. Scanner bootstrap downloads pinned tools and databases; it does not install target dependencies or execute the target."
-              ],
-              "code": "pipx install /absolute/path/to/commitscope\ncommitscope preflight\ncommitscope bootstrap\ncommitscope doctor"
-            },
-            {
-              "heading": "Sign in using the intended account",
-              "paragraphs": [
-                "Install official Claude Code 2.1.259 or newer and sign in as the same unprivileged OS user who will run reviews. The wrapper pins 2.1.278 for new installs but does not upgrade existing CLIs. Update an older CLI through the official channel and check claude --version before review. Corporate authentication is account-only. Resolve ambient API keys, provider routing, model overrides, and profile overrides; the command rejects them and has no API/provider fallback."
-              ],
-              "code": "sh scripts/install-claude.sh\nclaude auth login\nclaude auth status"
-            },
-            {
-              "heading": "Choose commit, policy, and storage",
-              "paragraphs": [
-                "Commit or stash all target changes, including untracked files. Use the full lowercase 40- or 64-character commit ID. Review examples/review-policy.json and place the approved policy outside the target. Remove recognizable credential forms, including Bearer/Basic authorization values and URLs with user information; screening cannot identify every unknown secret.",
-                "Choose a new output directory outside the target. Its existing parent must belong to the current user or root and must not be group/world writable. Symlinked paths and existing output directories are refused."
-              ],
-              "code": "git -C /absolute/path/to/application status --short\ngit -C /absolute/path/to/application rev-parse HEAD"
+              "id": "g01-outcome",
+              "heading": "Know the finish line before opening a terminal",
+              "blocks": [
+                {
+                  "id": "g01-definition",
+                  "type": "paragraph",
+                  "text": "A completed corporate run means: the employee reviewed an exact clean Git commit under an approved external policy; Semgrep, Gitleaks, Trivy, Claude Hunter and a fresh Claude Verifier all completed; the protected run was handed unchanged to an assigned reviewer; that person ran verify-review and recorded a separate decision. Hunter and Verifier are mandatory. A scanner-only demo, scan, ai, or GitHub Action is partial evidence."
+                },
+                {
+                  "id": "roles",
+                  "type": "diagram",
+                  "kind": "lanes",
+                  "caption": "Figure 1. Roles and handoff; tools never become the risk owner.",
+                  "nodes": [
+                    {
+                      "id": "owner",
+                      "label": "Data owner: approve source class, account and model"
+                    },
+                    {
+                      "id": "operator",
+                      "label": "Employee: prepare, run, protect and transfer"
+                    },
+                    {
+                      "id": "reviewer",
+                      "label": "Assigned reviewer: verify and inspect evidence"
+                    },
+                    {
+                      "id": "decision-owner",
+                      "label": "Company decision system: identity, exception and risk decision"
+                    }
+                  ]
+                },
+                {
+                  "id": "g01-result",
+                  "type": "callout",
+                  "text": "READY_FOR_HUMAN_REVIEW is a handoff state, not a merge approval or a claim that the application is secure. A real repository needs its own source-transfer approval and human review; this book uses synthetic material only."
+                }
+              ]
             }
           ]
         },
         {
-          "title": "Run one corporate review",
+          "id": "g02",
+          "title": "02 / Install and diagnose",
           "sections": [
             {
-              "heading": "All five stages are required",
-              "paragraphs": [
-                "Semgrep, Gitleaks, and Trivy must complete. Hunter and Verifier are mandatory for corporate completion. The command uses an immutable snapshot and writes the manifest last. Use the organization's approved exact model ID; aliases such as sonnet are rejected.",
-                "The following values illustrate the command shape. Replace the paths, commit ID, and APPROVED_EXACT_MODEL_ID with reviewed values. --allow-code-upload explicitly consents to sending the bounded screened source packet to Anthropic. Screening is not complete secret sanitization."
-              ],
-              "code": "commitscope review \\\n  --repo /absolute/path/to/application \\\n  --ref 0123456789abcdef0123456789abcdef01234567 \\\n  --policy /protected/review-policy.json \\\n  --out /protected/reviews/run-id \\\n  --auth account \\\n  --allow-code-upload \\\n  --model APPROVED_EXACT_MODEL_ID"
-            },
-            {
-              "heading": "Strict dependencies and explicit exceptions",
-              "paragraphs": [
-                "Dependency inventory is strict by default. Only for an audited standard-library-only target, add --allow-empty-sca with the owner's reason after reviewing imports and build metadata. The reason is recorded evidence, not independently authenticated proof or permission to ignore a missing lockfile.",
-                "Account login failure, exhausted quota, unavailable model, network or timeout failure, malformed output, and missing scanner or AI coverage produce INCOMPLETE. Preserve the failed run, resolve the cause, and start a new run."
-              ]
-            },
-            {
-              "heading": "Read the state and exit code",
-              "paragraphs": [
-                "READY_FOR_HUMAN_REVIEW / 0: required stages completed; no normalized finding met the policy threshold. Preserve and hand off the run for a human decision.",
-                "FINDINGS_REQUIRE_TRIAGE / 1: required stages completed and findings met the threshold. Preserve and hand off for triage.",
-                "INCOMPLETE / 2: a prerequisite, stage, or required verification failed. Corporate review has not completed.",
-                "READY_FOR_HUMAN_REVIEW does not approve a merge or assert that the application is secure."
+              "id": "g02-install",
+              "heading": "Install the published tag on a supported host",
+              "blocks": [
+                {
+                  "id": "g02-purpose",
+                  "type": "paragraph",
+                  "text": "Objective: start from reviewed v2.4.0, not an arbitrary moving branch. CommitScope supports macOS and glibc Linux on x86_64/ARM64 with Python 3.11-3.14; native Windows is outside its scope. Use WSL2 with a supported Linux distribution. Have Git, pipx/Python, certificate roots and approved outbound HTTPS. [G1]",
+                  "citations": [
+                    "G1"
+                  ]
+                },
+                {
+                  "id": "g02-install-code",
+                  "type": "code",
+                  "text": "pipx install \\\n  \"git+https://github.com/akarazhev/commitscope.git@v2.4.0\"\ncommitscope --version\ncommitscope preflight\ncommitscope bootstrap\ncommitscope doctor"
+                },
+                {
+                  "id": "g02-observe",
+                  "type": "paragraph",
+                  "text": "Expected: version 2.4.0, host prerequisites accepted, pinned Semgrep/Gitleaks/Trivy installed in CommitScope state, and doctor reporting healthy scanners. Bootstrap downloads executables and scanner data but does not execute or install the target application. The pinned tool and DB details are in the run evidence."
+                },
+                {
+                  "id": "g02-recover",
+                  "type": "callout",
+                  "text": "Recovery: if preflight rejects OS, architecture or Python, move to a supported host. If bootstrap or doctor fails, repair network, certificates, free space or scanner state and rerun diagnostics. Do not call a failed doctor a completed review or bypass a mandatory scanner."
+                }
               ]
             }
           ]
         },
         {
-          "title": "Hand off and recheck",
+          "id": "g03",
+          "title": "03 / Claude Code account and consent",
           "sections": [
             {
-              "heading": "Protect and verify the original run",
-              "paragraphs": [
-                "Give the unchanged confidential run directory to the assigned human reviewer through protected storage. Share normalized top-level reports and evidence/ only under company rules. Source packets, raw scanner output, model envelopes, and diagnostics under private/ must not be published or committed."
-              ],
-              "code": "commitscope verify-review --run /protected/reviews/run-id"
-            },
-            {
-              "heading": "Understand what verification proves",
-              "paragraphs": [
-                "verify-review checks exact artifact layout, safe types and permissions, hashes, commit/snapshot identity, policy/resource hashes, completed scanners and Hunter/Verifier coverage, and decision consistency. Valid evidence returns its recorded 0 or 1 class; changed, missing, inconsistent, or incomplete evidence returns INCOMPLETE / 2.",
-                "The manifest is unsigned: authorship and immutability are not cryptographically verified. Inspect the evidence and complete a copy of reviewer-decision-template.json in the protected decision system with the verified manifest hash. Human identity and approval remain external controls."
+              "id": "g03-account",
+              "heading": "Use the intended personal or company account",
+              "blocks": [
+                {
+                  "id": "g03-purpose",
+                  "type": "paragraph",
+                  "text": "Objective: make the future Hunter and Verifier requests from the approved unprivileged OS user and account. Install official Claude Code 2.1.259 or newer under that user. The local wrapper pins 2.1.278 for new installs but does not upgrade an existing CLI; update older versions via Anthropic's documented channel. Claude Code's own platform support is broader than CommitScope's. [G2]",
+                  "citations": [
+                    "G2"
+                  ]
+                },
+                {
+                  "id": "g03-code",
+                  "type": "code",
+                  "text": "claude --version\nclaude auth login\nclaude auth status"
+                },
+                {
+                  "id": "g03-observe",
+                  "type": "paragraph",
+                  "text": "Expected: a supported CLI version and a valid login for the account the organization authorized. Confirm which credential and privacy terms actually apply. Personal and commercial data-use and retention policies differ; a personal subscription is not automatically permission to upload company source. The corporate review has --auth account only, rejects ambient API/provider overrides, and has no API fallback. [G3] [G4]",
+                  "citations": [
+                    "G3",
+                    "G4"
+                  ]
+                },
+                {
+                  "id": "g03-recover",
+                  "type": "callout",
+                  "text": "Recovery: if login, quota, model access or policy approval is missing, stop before review. Sign in again as the intended user, resolve conflicting ambient credentials, obtain owner authorization, or choose the approved exact model ID. Do not paste a token into the guide or switch providers silently."
+                }
               ]
-            },
+            }
+          ]
+        },
+        {
+          "id": "g04",
+          "title": "04 / Prepare a synthetic target",
+          "sections": [
             {
-              "heading": "Rerun for every new commit",
-              "paragraphs": [
-                "After a fix, use a new commit and a new output directory. Repeat scanners, Hunter, Verifier, manifest verification, and human triage. Keep earlier evidence unchanged. A missing finding in compare is not proof of remediation."
+              "id": "g04-target",
+              "heading": "Create a clean full-commit training repository",
+              "blocks": [
+                {
+                  "id": "g04-purpose",
+                  "type": "paragraph",
+                  "text": "Objective: practice with the bundled synthetic IDOR example, not company code. The commands below assume /protected is an approved, user-owned 0700 parent outside the target repository; replace it with an approved absolute path on your host. Obtain the v2.4.0 source solely to access its fixture and example policy. Never use a live repository until its owner permits source transfer."
+                },
+                {
+                  "id": "g04-source-code",
+                  "type": "code",
+                  "text": "git clone --branch v2.4.0 --depth 1 \\\n  https://github.com/akarazhev/commitscope.git \\\n  /protected/commitscope-training-source\ninstall -d -m 700 /protected/training-target\ninstall -d -m 700 /protected/reviews\ncp /protected/commitscope-training-source/examples/ai-acceptance/idor/vulnerable/app.py \\\n  /protected/training-target/app.py\ninstall -m 600 /protected/commitscope-training-source/examples/review-policy.json \\\n  /protected/review-policy.json"
+                },
+                {
+                  "id": "g04-commit-code",
+                  "type": "code",
+                  "text": "git -C /protected/training-target init -q\ngit -C /protected/training-target add app.py\ngit -C /protected/training-target \\\n  -c user.name=Training -c user.email=training@example.invalid \\\n  commit -m \"Synthetic IDOR baseline\"\ngit -C /protected/training-target status --short\ngit -C /protected/training-target rev-parse HEAD"
+                },
+                {
+                  "id": "g04-observe",
+                  "type": "paragraph",
+                  "text": "Expected: an empty status output and one full lower-case 40-character commit ID. Inspect and approve the copied policy outside the target: scope, threats, invariant AUTH-001, threshold and upload allowance. The synthetic fixture has no third-party dependency manifest, so its live review uses an explicit --allow-empty-sca reason after inspection. On a real target, do not use that exception to conceal a missing lockfile."
+                },
+                {
+                  "id": "g04-recover",
+                  "type": "callout",
+                  "text": "Recovery: if status is not empty, commit or remove every change, including untracked files. If policy contains recognizable credential forms such as Bearer/Basic authorization values or URLs with user information, it is rejected before scans. Screening of source packets is heuristic and cannot prove that unknown secrets are absent. Fix the source or policy and seek new approval before upload."
+                }
               ]
-            },
+            }
+          ]
+        },
+        {
+          "id": "g05",
+          "title": "05 / Practice, then consent-gated review",
+          "sections": [
             {
-              "heading": "Partial diagnostics are not corporate acceptance",
-              "paragraphs": [
-                "The supplied GitHub Action and CI workflows run scanners only. They do not perform the required local Hunter/Verifier workflow. Never upload private/ or give CI a developer's Claude login.",
-                "SCANNERS_VERIFIED_AI_NOT_RUN is not completed corporate acceptance. It describes scanner-only acceptance evidence. Compatibility commands commitscope scan and commitscope ai, including a manually assembled sequence, do not replace commitscope review.",
-                "Unit tests and generated documents do not establish live readiness. Operators must separately validate supported hosts, real scanner execution, and explicitly authorized Hunter/Verifier runs on controlled fixtures. References: START-HERE.md and docs/VERIFICATION.md. Source mode: python3 -I review.py <command> from the trusted checkout."
+              "id": "g05-flow",
+              "heading": "Know which command produces which evidence",
+              "blocks": [
+                {
+                  "id": "g05-intro",
+                  "type": "paragraph",
+                  "text": "Objective: distinguish a scanner exercise from a full local review. First run the scanner-only demo in a new directory; it makes no Claude request and is not corporate acceptance. Its scanner results depend on current databases. Then, only after explicit owner approval for this synthetic source, run the consent-gated review using the full SHA printed above and an approved exact model ID."
+                },
+                {
+                  "id": "timeline",
+                  "type": "diagram",
+                  "kind": "flow",
+                  "caption": "Figure 2. One full run: commit, scanners, independent model stages, evidence, human handoff.",
+                  "nodes": [
+                    {
+                      "id": "commit",
+                      "label": "Clean exact commit and approved external policy"
+                    },
+                    {
+                      "id": "scanners",
+                      "label": "Semgrep, Gitleaks, Trivy and dependency coverage"
+                    },
+                    {
+                      "id": "hunter",
+                      "label": "Claude Hunter proposes bounded hypotheses"
+                    },
+                    {
+                      "id": "verifier",
+                      "label": "Fresh Claude Verifier challenges every candidate and coverage"
+                    },
+                    {
+                      "id": "handoff",
+                      "label": "Protected manifest and reports; assigned human reviewer"
+                    }
+                  ]
+                },
+                {
+                  "id": "g05-demo-code",
+                  "type": "code",
+                  "text": "commitscope demo --out /protected/reviews/scanner-demo"
+                },
+                {
+                  "id": "g05-demo-observe",
+                  "type": "paragraph",
+                  "text": "Expected: DEMO_PASSED when all synthetic scanner checks match. SCANNERS_VERIFIED_AI_NOT_RUN is not completed corporate acceptance. A demo failure means investigate tool or DB drift, not edit the expected result to green. The demo's output is separate from the review run."
+                },
+                {
+                  "id": "g05-review-code",
+                  "type": "code",
+                  "text": "commitscope review \\\n  --repo /protected/training-target \\\n  --ref 0123456789abcdef0123456789abcdef01234567 \\\n  --policy /protected/review-policy.json \\\n  --out /protected/reviews/run-id \\\n  --auth account --allow-code-upload \\\n  --model APPROVED_EXACT_MODEL_ID \\\n  --allow-empty-sca \"Synthetic stdlib-only fixture; reviewed imports and metadata\""
+                },
+                {
+                  "id": "g05-consent",
+                  "type": "callout",
+                  "text": "This is a command template, not an observed live run. Replace the example SHA with the actual full ID from g04, APPROVED_EXACT_MODEL_ID with the authorized exact ID, and run-id with a new name. --allow-code-upload explicitly permits the screened source packet to reach Anthropic under the chosen account's terms. No Claude request is made by reading or building this guide. [G4]",
+                  "citations": [
+                    "G4"
+                  ]
+                },
+                {
+                  "id": "g05-recover",
+                  "type": "paragraph",
+                  "text": "Expected: one of the three states in g06 and a protected run directory. Recovery: an authentication, quota, model, timeout, malformed response or required-stage failure is INCOMPLETE. Preserve that directory, fix the cause, and start a new run; do not reuse the output path or fall back to an API key."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "g06",
+          "title": "06 / Read states and findings",
+          "sections": [
+            {
+              "id": "g06-decision",
+              "heading": "Translate program exit into a reviewer action",
+              "blocks": [
+                {
+                  "id": "decision",
+                  "type": "diagram",
+                  "kind": "decision",
+                  "caption": "Figure 3. All three machine states lead to preservation; only complete runs can be triaged.",
+                  "nodes": [
+                    {
+                      "id": "state",
+                      "label": "Required stages completed and evidence consistent?"
+                    },
+                    {
+                      "id": "ready",
+                      "label": "0 READY_FOR_HUMAN_REVIEW: no finding at threshold; hand off"
+                    },
+                    {
+                      "id": "findings",
+                      "label": "1 FINDINGS_REQUIRE_TRIAGE: findings at threshold; triage"
+                    },
+                    {
+                      "id": "incomplete",
+                      "label": "2 INCOMPLETE: missing prerequisite or stage; repair and rerun"
+                    }
+                  ]
+                },
+                {
+                  "id": "g06-table",
+                  "type": "table",
+                  "caption": "Table 1. Status, evidence meaning, and next action",
+                  "headers": [
+                    "Exit / status",
+                    "Meaning",
+                    "Next action"
+                  ],
+                  "rows": [
+                    [
+                      "0 / READY_FOR_HUMAN_REVIEW",
+                      "Required stages complete; no normalized finding at policy threshold",
+                      "Reviewer still inspects and decides"
+                    ],
+                    [
+                      "1 / FINDINGS_REQUIRE_TRIAGE",
+                      "Required stages complete; findings reach threshold",
+                      "Reviewer validates, prioritizes, or rejects"
+                    ],
+                    [
+                      "2 / INCOMPLETE",
+                      "Prerequisite, coverage or consistency failed",
+                      "Keep evidence, repair, run again"
+                    ]
+                  ]
+                },
+                {
+                  "id": "g06-anatomy",
+                  "type": "paragraph",
+                  "text": "Read the top-level report.md first, then report.json for normalized finding fields and report.sarif for compatible tools. Follow each finding to evidence/ and the exact code location; inspect the strongest counterargument and omissions. Raw scanner output, source packets, model envelopes and diagnostics under private/ are confidential. A synthetic IDOR candidate is an example of a hypothesis, not proof of live model performance."
+                },
+                {
+                  "id": "g06-recover",
+                  "type": "callout",
+                  "text": "If a finding lacks a reachable path, violated invariant or credible evidence, record the uncertainty; do not silently delete it. If coverage is absent, classify the run INCOMPLETE. READY_FOR_HUMAN_REVIEW never authorizes a merge."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "g07",
+          "title": "07 / Protect, transfer, verify",
+          "sections": [
+            {
+              "id": "g07-handoff",
+              "heading": "Give the reviewer the unchanged run",
+              "blocks": [
+                {
+                  "id": "directory",
+                  "type": "diagram",
+                  "kind": "grid",
+                  "caption": "Figure 4. Run directory anatomy; the entire directory is confidential.",
+                  "nodes": [
+                    {
+                      "id": "reports",
+                      "label": "Top level: report.md, report.json, report.sarif"
+                    },
+                    {
+                      "id": "evidence",
+                      "label": "evidence/: normalized trace and coverage material"
+                    },
+                    {
+                      "id": "private",
+                      "label": "private/: raw scans, source packet, model envelopes, diagnostics"
+                    },
+                    {
+                      "id": "manifest",
+                      "label": "Manifest and reviewer-decision-template.json: integrity check and human record template"
+                    }
+                  ]
+                },
+                {
+                  "id": "g07-action",
+                  "type": "paragraph",
+                  "text": "Objective: preserve the original 0700 directory and 0600 files, then send that unchanged directory through the company's approved protected channel to the named reviewer. Never commit or publish private/. Normalized reports and evidence/ may be shared only under company rules. The reviewer must obtain and verify the entire original run, not just a Markdown excerpt."
+                },
+                {
+                  "id": "g07-code",
+                  "type": "code",
+                  "text": "commitscope verify-review --run /protected/reviews/run-id"
+                },
+                {
+                  "id": "g07-observe",
+                  "type": "paragraph",
+                  "text": "Expected: verify-review checks layout, file types and permissions, hashes, commit/snapshot and policy/resource identity, scanner and Hunter/Verifier coverage, and decision consistency. A valid complete run returns its recorded 0 or 1 class; changed, missing or incomplete evidence returns 2. The reviewer inspects evidence and limitations, then completes a copy of reviewer-decision-template.json in the protected company decision system with the verified manifest hash."
+                },
+                {
+                  "id": "g07-limit",
+                  "type": "callout",
+                  "text": "The manifest is unsigned. verify-review establishes internal consistency, not authorship or immutable custody. Human identity, exception approval, risk acceptance and storage audit are external controls. Recovery: if verification fails, retain the original, investigate the transfer and obtain a fresh unchanged run; never edit the sealed evidence."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "g08",
+          "title": "08 / Fix and rerun",
+          "sections": [
+            {
+              "id": "g08-fix",
+              "heading": "A new commit is a new review",
+              "blocks": [
+                {
+                  "id": "g08-action",
+                  "type": "paragraph",
+                  "text": "Objective: see how remediation changes evidence without overwriting history. In training, copy the bundled fixed IDOR app.py into the same synthetic target, commit it, and record the new full SHA. For company code, apply the approved fix and functional/security tests instead. Use a fresh output directory and repeat all scanners, Hunter, Verifier, verification and human triage."
+                },
+                {
+                  "id": "g08-code",
+                  "type": "code",
+                  "text": "cp /protected/commitscope-training-source/examples/ai-acceptance/idor/fixed/app.py \\\n  /protected/training-target/app.py\ngit -C /protected/training-target add app.py\ngit -C /protected/training-target \\\n  -c user.name=Training -c user.email=training@example.invalid \\\n  commit -m \"Synthetic ownership fix\"\ngit -C /protected/training-target rev-parse HEAD"
+                },
+                {
+                  "id": "g08-observe",
+                  "type": "paragraph",
+                  "text": "Expected: a different full commit ID. Run the g05 review command again with this new SHA and /protected/reviews/run-fixed as --out, then verify and hand off. Keep run-id and run-fixed unchanged. Compare normalized findings, coverage and policy; disappearance alone is not proof of remediation. Have the reviewer confirm the ownership invariant in authorized tests and record a new decision."
+                },
+                {
+                  "id": "g08-recover",
+                  "type": "callout",
+                  "text": "Recovery: if the new tree is dirty, commit or clean it before review. If the run is INCOMPLETE, repair and start another fresh directory. If a finding remains or changes, triage it rather than assuming the fix succeeded."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "g09",
+          "title": "09 / Troubleshooting and reference",
+          "sections": [
+            {
+              "id": "g09-troubleshoot",
+              "heading": "Diagnose the failed boundary, not just the exit code",
+              "blocks": [
+                {
+                  "id": "g09-table",
+                  "type": "table",
+                  "caption": "Table 2. Observable problem, likely boundary, next action",
+                  "headers": [
+                    "Observation",
+                    "Likely cause",
+                    "Action"
+                  ],
+                  "rows": [
+                    [
+                      "preflight fails",
+                      "Host, Python, Git or path restriction",
+                      "Use supported host; inspect exact diagnostic"
+                    ],
+                    [
+                      "doctor fails",
+                      "Pinned scanner missing or wrong version",
+                      "Repair bootstrap and rerun doctor"
+                    ],
+                    [
+                      "review rejects policy",
+                      "Credential-like data or invalid external policy",
+                      "Remove material; obtain approval again"
+                    ],
+                    [
+                      "review rejects repository",
+                      "Dirty tree, abbreviated SHA or unsafe path",
+                      "Clean tree; use full SHA and safe paths"
+                    ],
+                    [
+                      "Claude stage INCOMPLETE",
+                      "Login, quota, exact model, timeout or malformed result",
+                      "Resolve account/stage; new run"
+                    ],
+                    [
+                      "verify-review returns 2",
+                      "Changed, missing, unsafe or incomplete evidence",
+                      "Preserve original; investigate transfer"
+                    ],
+                    [
+                      "Finding disappears",
+                      "Changed code or detection variability",
+                      "Test invariant and re-review exact commit"
+                    ]
+                  ]
+                },
+                {
+                  "id": "g09-commands",
+                  "type": "code",
+                  "text": "commitscope preflight\ncommitscope bootstrap\ncommitscope doctor\ncommitscope demo --out /protected/reviews/scanner-demo\ncommitscope review --help\ncommitscope verify-review --run /protected/reviews/run-id"
+                },
+                {
+                  "id": "g09-final",
+                  "type": "paragraph",
+                  "text": "A command returning 0 is not automatically a security decision. The GitHub Action and compatibility scan/ai commands are scanner or partial diagnostics; the assigned reviewer is the gate for a real repository. Check this guide against the installed v2.4.0 CLI and revalidate model and scanner behavior over time. [G1] [G2] [G5]",
+                  "citations": [
+                    "G1",
+                    "G2",
+                    "G5"
+                  ]
+                }
               ]
             }
           ]

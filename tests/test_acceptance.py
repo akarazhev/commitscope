@@ -26,6 +26,18 @@ def active_documentation(text):
 
 
 class AcceptanceTests(unittest.TestCase):
+    def test_user_guide_rejects_partial_corporate_acceptance(self):
+        import json
+        for language in ('en', 'ru'):
+            source = json.loads((ROOT / f'docs/security-review-pdfs/source/content-{language}.json').read_text())
+            guide = source['documents']['user-guide']
+            chapters = guide['chapters']
+            text = ' '.join(block.get('text', '') for chapter in chapters
+                            for section in chapter['sections'] for block in section['blocks'])
+            self.assertIn('commitscope review', text)
+            self.assertIn('SCANNERS_VERIFIED_AI_NOT_RUN', text)
+            self.assertIn('verify-review', text)
+
     def test_runnable_entrypoint_and_documented_commands(self):
         entry = ROOT / 'review.py'
         self.assertTrue(entry.is_file(), 'A real executable entrypoint must be shipped')
