@@ -3,20 +3,23 @@
 For the current workflow, begin with [Start Here](../START-HERE.md). CommitScope's
 internal Python package remains `sec_review` for compatibility.
 
-## Install v2.4.0
+## Install v2.4.1
 
-Install the published exact tag, not a moving branch:
+Install the pinned public PyPI package:
 
 ```bash
-pipx install "git+https://github.com/akarazhev/commitscope.git@v2.4.0"
+pipx install commitscope==2.4.1
 commitscope preflight
 commitscope bootstrap
 commitscope doctor
 ```
 
+`pipx install commitscope` selects the latest available PyPI version. For the
+previous release use
+`pipx install "git+https://github.com/akarazhev/commitscope.git@v2.4.0"`.
 For an independently reviewed local revision, replace the first command with
-`pipx install /absolute/path/to/commitscope`. The documentation updates in this
-branch postdate v2.4.0 and do not alter its tag or release asset.
+`pipx install /absolute/path/to/commitscope`. The v2.4.0 presentation handouts
+remain unchanged; v2.4.1 does not alter the earlier tag or release assets.
 
 For source-checkout operation, use the same revision directly:
 

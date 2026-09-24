@@ -7,15 +7,18 @@ an older release.
 
 ## 1. Install And Check The Host
 
-Install the published v2.4.0 tag. A reviewed local source checkout is an alternative;
-use `python3 -I review.py` from that checkout only when its exact revision is approved:
+Install the pinned v2.4.1 package from PyPI. A reviewed local source checkout
+is an alternative; use `python3 -I review.py` from that checkout only when its
+exact revision is approved:
 
 ```bash
-pipx install "git+https://github.com/akarazhev/commitscope.git@v2.4.0"
+pipx install commitscope==2.4.1
 commitscope preflight
 commitscope bootstrap
 commitscope doctor
 ```
+
+`pipx install commitscope` selects the latest PyPI release rather than a fixed version.
 
 For the full illustrated walkthrough, use the [English guide](docs/security-review-pdfs/en/commitscope-user-guide-en.pdf)
 or [Russian guide](docs/security-review-pdfs/ru/commitscope-user-guide-ru.pdf).

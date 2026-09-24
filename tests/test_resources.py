@@ -5,7 +5,8 @@ import sys
 import tempfile
 import unittest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
 
 from sec_review.core import ReviewError
 from sec_review.resources import RESOURCE_SINGLE_FILES, load_resource_manifest, validate_resource_root
@@ -44,6 +45,11 @@ def write_resource_root(root: Path) -> Path:
 
 
 class ResourceManifestTests(unittest.TestCase):
+    def test_checked_in_sdist_manifest_hash_matches_trusted_resource(self):
+        actual = hashlib.sha256((ROOT / "config/sdist-manifest.json").read_bytes()).hexdigest()
+        declared = load_resource_manifest(ROOT)["config/sdist-manifest.json"]
+        self.assertEqual(declared, actual)
+
     def test_acceptance_harness_and_test_are_trusted_single_file_resources(self):
         self.assertIn("scripts/ai_acceptance.py", RESOURCE_SINGLE_FILES)
         self.assertIn("tests/test_ai_acceptance.py", RESOURCE_SINGLE_FILES)
