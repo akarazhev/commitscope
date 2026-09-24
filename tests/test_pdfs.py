@@ -16,7 +16,12 @@ from unittest.mock import MagicMock
 ROOT = Path(__file__).resolve().parents[1]
 BUILDER_SPEC = importlib.util.spec_from_file_location("build_pdfs", ROOT / "scripts/build_pdfs.py")
 build_pdfs = importlib.util.module_from_spec(BUILDER_SPEC)
-BUILDER_SPEC.loader.exec_module(build_pdfs)
+try:
+    BUILDER_SPEC.loader.exec_module(build_pdfs)
+except ModuleNotFoundError as error:
+    if error.name != "reportlab":
+        raise
+    build_pdfs = None
 PDF_ROOT = ROOT / "docs/security-review-pdfs"
 PDF_NAMES = tuple(
     f"{language}/{name}"
@@ -53,6 +58,7 @@ class PdfTests(unittest.TestCase):
         ru["documents"]["methodology"]["chapters"][0]["title"] = "Решение"
         return en, ru
 
+    @unittest.skipUnless(build_pdfs is not None, "ReportLab required for PDF builder checks")
     def test_active_source_ids_and_citations_are_validated(self):
         en, ru = self.converted_pair()
         build_pdfs.validate_source(en, "en")
@@ -73,6 +79,7 @@ class PdfTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     build_pdfs.validate_source(bad, "en")
 
+    @unittest.skipUnless(build_pdfs is not None, "ReportLab required for PDF builder checks")
     def test_english_russian_structure_must_match(self):
         en, ru = self.converted_pair()
         ru["documents"]["methodology"]["chapters"][0]["sections"] = []
@@ -84,6 +91,7 @@ class PdfTests(unittest.TestCase):
                 build_pdfs.build_pair(en, ru, output)
             self.assertFalse(output.exists())
 
+    @unittest.skipUnless(build_pdfs is not None, "ReportLab required for PDF builder checks")
     @unittest.skipUnless(shutil.which("pdftotext") and shutil.which("pdftoppm"), "Poppler required")
     def test_semantic_blocks_render_literal_text_wrapped_table_and_figure(self):
         en, ru = self.converted_pair()
@@ -137,6 +145,7 @@ class PdfTests(unittest.TestCase):
                 if links.returncode == 0:
                     self.assertIn("https://csrc.nist.gov/pubs/sp/800/218/final", links.stdout)
 
+    @unittest.skipUnless(build_pdfs is not None, "ReportLab required for PDF builder checks")
     def test_decision_diagram_reserves_space_for_four_outcomes(self):
         block = {"kind": "decision", "nodes": [
             {"id": "root", "label": "Result"},
@@ -157,6 +166,7 @@ class PdfTests(unittest.TestCase):
         self.assertEqual(arrows[0][1], arrows[1][1])
         self.assertEqual(arrows[1][1], arrows[2][1])
 
+    @unittest.skipUnless(build_pdfs is not None, "ReportLab required for PDF builder checks")
     def test_two_column_diagrams_measure_the_drawn_label_width(self):
         style = build_pdfs.ParagraphStyle("diagram-columns", fontName="Helvetica", fontSize=9.5, leading=13)
         long_label = "Long Russian-style label with several words describing confidential evidence and reviewer decisions " * 2
@@ -170,6 +180,7 @@ class PdfTests(unittest.TestCase):
                 needed_height = diagram.paragraphs[0].wrap(drawn_width - 20, 1000)[1] + 18
                 self.assertGreaterEqual(diagram.box_heights[0], needed_height)
 
+    @unittest.skipUnless(build_pdfs is not None, "ReportLab required for PDF builder checks")
     def test_boundary_diagram_draws_both_cross_boundary_flows(self):
         block = {"kind": "boundary", "nodes": [
             {"id": "snapshot", "label": "Snapshot"}, {"id": "evidence", "label": "Evidence"},
@@ -185,6 +196,7 @@ class PdfTests(unittest.TestCase):
         diagram.draw()
         self.assertEqual(len(arrows), 2)
 
+    @unittest.skipUnless(build_pdfs is not None, "ReportLab required for PDF builder checks")
     @unittest.skipUnless(shutil.which("pdftotext"), "Poppler required")
     def test_methodology_has_sourced_bilingual_argument_and_figures(self):
         sources = [json.loads((PDF_ROOT / f"source/content-{language}.json").read_text()) for language in ("en", "ru")]
@@ -221,6 +233,7 @@ class PdfTests(unittest.TestCase):
                                      ("07 / Контролируемое внедрение", "Рисунок 4")):
                 self.assertTrue(any(chapter in page and caption in page for page in pages), chapter)
 
+    @unittest.skipUnless(build_pdfs is not None, "ReportLab required for PDF builder checks")
     @unittest.skipUnless(shutil.which("pdftotext"), "Poppler required")
     def test_user_guide_teaches_complete_tagged_local_review(self):
         sources = [json.loads((PDF_ROOT / f"source/content-{language}.json").read_text()) for language in ("en", "ru")]
