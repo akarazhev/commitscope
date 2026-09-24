@@ -1,6 +1,7 @@
 {
   "schema_version": "1.0",
   "files": [
+    ".github/workflows/publish-pypi.yml",
     ".github/workflows/scan.yml",
     ".github/workflows/verify.yml",
     ".gitignore",

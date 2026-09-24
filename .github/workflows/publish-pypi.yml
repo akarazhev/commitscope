@@ -1,0 +1,61 @@
+name: Publish CommitScope to PyPI
+on:
+  release:
+    types: [published]
+permissions:
+  contents: read
+jobs:
+  prepare:
+    name: Verify release distributions
+    if: ${{ !github.event.release.draft && !github.event.release.prerelease }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.14'
+      - name: Download published release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --dir release-assets
+      - name: Verify exact names, checksums, and package metadata
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: python -I scripts/verify_release_assets.py --tag "$RELEASE_TAG" --dir release-assets
+      - name: Compare release files with build from tagged source
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          SOURCE_DATE_EPOCH: '1790035200'
+        run: |
+          version="${RELEASE_TAG#v}"
+          python -I scripts/build_dist.py --dist-dir rebuilt
+          cmp release-assets/"commitscope-$version-py3-none-any.whl" rebuilt/"commitscope-$version-py3-none-any.whl"
+          cmp release-assets/"commitscope-$version.tar.gz" rebuilt/"commitscope-$version.tar.gz"
+      - name: Hand verified distributions to the publish job
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: commitscope-pypi-distributions
+          if-no-files-found: error
+          retention-days: 1
+          path: |
+            release-assets/*.whl
+            release-assets/*.tar.gz
+  publish:
+    name: Publish verified distributions
+    needs: prepare
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: commitscope-pypi-distributions
+          path: dist
+      - uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # release/v1

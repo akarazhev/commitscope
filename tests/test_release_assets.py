@@ -106,5 +106,30 @@ class ReleaseAssetTests(unittest.TestCase):
             verify(self.directory, "v2.4.1-rc1")
 
 
+class PublishWorkflowTests(unittest.TestCase):
+    def test_pypi_publish_has_separate_read_only_preparation_and_oidc_job(self):
+        workflow = (ROOT / ".github/workflows/publish-pypi.yml").read_text()
+        self.assertIn("types: [published]", workflow)
+        self.assertIn("!github.event.release.prerelease", workflow)
+        self.assertIn("!github.event.release.draft", workflow)
+        self.assertIn("  prepare:\n", workflow)
+        self.assertIn("  publish:\n", workflow)
+        prepare, publish = workflow.split("  publish:\n", 1)
+        self.assertIn("permissions:\n  contents: read", prepare)
+        self.assertNotIn("id-token: write", prepare)
+        self.assertIn("gh release download", prepare)
+        self.assertIn("scripts/verify_release_assets.py", prepare)
+        self.assertIn("cmp release-assets/", prepare)
+        self.assertIn("needs: prepare", publish)
+        self.assertIn("environment: pypi", publish)
+        self.assertIn("id-token: write", publish)
+        self.assertIn("actions/download-artifact@", publish)
+        self.assertIn("pypa/gh-action-pypi-publish@", publish)
+        self.assertNotIn("actions/checkout@", publish)
+        for forbidden in ("skip-existing", "TWINE_PASSWORD", "PYPI_API_TOKEN",
+                          "pull_request_target", "workflow_dispatch"):
+            self.assertNotIn(forbidden, workflow)
+
+
 if __name__ == "__main__":
     unittest.main()
