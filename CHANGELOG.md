@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.4.1 - 2026-09-24
+
+- Publish a corrected package description and pinned installation guidance for
+  public PyPI without changing the corporate review workflow.
+- Add a release-asset verification gate and tokenless PyPI Trusted Publishing.
+- Preserve the v2.4.0 PDF editions and GitHub release unchanged.
+
 ## 2.4.0 - 2026-09-22
 
 - Add the consent-gated local corporate `review` workflow with independent Claude

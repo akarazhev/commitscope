@@ -17,26 +17,35 @@ training exercise through protected human handoff.
 
 | Document | English | Russian |
 |---|---|---|
-| Methodology | [PDF](docs/security-review-pdfs/en/security-review-methodology-en.pdf) | [PDF](docs/security-review-pdfs/ru/security-review-methodology-ru.pdf) |
-| User Guide | [PDF](docs/security-review-pdfs/en/commitscope-user-guide-en.pdf) | [PDF](docs/security-review-pdfs/ru/commitscope-user-guide-ru.pdf) |
+| Methodology | [PDF](https://github.com/akarazhev/commitscope/blob/v2.4.1/docs/security-review-pdfs/en/security-review-methodology-en.pdf) | [PDF](https://github.com/akarazhev/commitscope/blob/v2.4.1/docs/security-review-pdfs/ru/security-review-methodology-ru.pdf) |
+| User Guide | [PDF](https://github.com/akarazhev/commitscope/blob/v2.4.1/docs/security-review-pdfs/en/commitscope-user-guide-en.pdf) | [PDF](https://github.com/akarazhev/commitscope/blob/v2.4.1/docs/security-review-pdfs/ru/commitscope-user-guide-ru.pdf) |
 
-These updated handouts follow the published v2.4.0 tag; this documentation branch
-does not rewrite that tag or its release assets.
+These v2.4.0 handouts are included unchanged in the v2.4.1 source distribution.
+Neither v2.4.0's tag nor its release assets are rewritten.
 
-## Install v2.4.0
+## Install v2.4.1
 
-Install the published, pinned tag rather than a moving branch:
+Install the pinned PyPI version:
 
 ```bash
-pipx install "git+https://github.com/akarazhev/commitscope.git@v2.4.0"
+pipx install commitscope==2.4.1
 commitscope preflight
 commitscope bootstrap
 commitscope doctor
 ```
 
-For an independently reviewed local checkout of the same revision, use
+To follow the latest public PyPI release instead:
+
+```bash
+pipx install commitscope
+```
+
+Pin the version for a repeatable corporate rollout. The previous release
+remains available as
+`pipx install "git+https://github.com/akarazhev/commitscope.git@v2.4.0"`.
+For an independently reviewed local checkout, use
 `pipx install /absolute/path/to/commitscope` instead. Do not assume a changed
-checkout has the same behavior as the published tag.
+checkout has the same behavior as a published release.
 
 Source-checkout commands remain available as `python3 -I review.py <command>`.
 Supported hosts are macOS and glibc Linux on x86_64 or ARM64 with Python 3.11-3.14.
