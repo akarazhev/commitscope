@@ -261,7 +261,7 @@ class PdfTests(unittest.TestCase):
                                     for page in extracted.stdout.split("\f")))
             prose = json.dumps(document, ensure_ascii=False)
             commands = "\n".join(block["text"] for block in blocks if block["type"] == "code")
-            for required in ("git+https://github.com/akarazhev/commitscope.git@v2.4.0", "--auth account",
+            for required in ("pipx install commitscope==2.4.1", "--auth account",
                              "--allow-code-upload", "APPROVED_EXACT_MODEL_ID", "--out /protected/reviews/",
                              "verify-review", "READY_FOR_HUMAN_REVIEW", "FINDINGS_REQUIRE_TRIAGE", "INCOMPLETE"):
                 self.assertIn(required, prose, required)
@@ -275,13 +275,13 @@ class PdfTests(unittest.TestCase):
             extracted = run("pdftotext", "-layout", str(pdf), "-")
             self.assertEqual(extracted.returncode, 0, extracted.stderr)
             self.assertIn("Figure 1" if language == "en" else "Рисунок 1", extracted.stdout)
-            self.assertIn("v2.4.0", extracted.stdout)
+            self.assertIn("2.4.1", extracted.stdout)
             pages = [page for page in extracted.stdout.split("\f") if page.strip()]
             self.assertIn("01 /", pages[0])
             self.assertIn("Figure 1" if language == "en" else "Рисунок 1", pages[0])
             self.assertIn("[G1]", pages[-1])
             self.assertIn("[G5]", pages[-1])
-            self.assertTrue(any("git clone --branch v2.4.0" in page and
+            self.assertTrue(any("git clone --branch v2.4.1" in page and
                                 "/protected/review-policy.json" in page for page in pages))
             for chapter, figure in (("05 /", "Figure 2" if language == "en" else "Рисунок 2"),
                                     ("07 /", "Figure 4" if language == "en" else "Рисунок 4")):
@@ -312,7 +312,8 @@ class PdfTests(unittest.TestCase):
                 self.assertEqual(info.returncode, 0, info.stderr)
                 self.assertRegex(info.stdout, r"Pages:\s+[1-9][0-9]*")
                 self.assertRegex(info.stdout, r"Page size:\s+595\.\d+ x 841\.\d+ pts \(A4\)")
-                self.assertIn("2.4.0", info.stdout)
+                edition = "2.4.0" if "legacy" in relative else "2.4.1"
+                self.assertIn(edition, info.stdout)
                 text = run("pdftotext", "-layout", str(path), "-")
                 self.assertEqual(text.returncode, 0, text.stderr)
                 self.assertNotIn("\ufffd", text.stdout)
@@ -348,6 +349,8 @@ class PdfTests(unittest.TestCase):
             self.assertEqual(source["version"], "2.4.0")
             self.assertEqual(source["language"], language)
             self.assertEqual(set(source["documents"]), {"methodology", "user-guide", "playbook"})
+            self.assertEqual(source["documents"]["methodology"]["version"], "2.4.1")
+            self.assertEqual(source["documents"]["user-guide"]["version"], "2.4.1")
             self.assertTrue(source["documents"]["playbook"]["legacy"])
 
     def test_presentation_entry_points_and_legacy_bytes(self):

@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Update the English and Russian methodology and user guide PDFs for the public
+  2.4.1 PyPI installation path. The published 2.4.1 distributions retain the
+  earlier PDF editions.
+
 ## 2.4.1 - 2026-09-24
 
 - Publish a corrected package description and pinned installation guidance for

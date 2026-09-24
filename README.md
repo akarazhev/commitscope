@@ -17,11 +17,11 @@ training exercise through protected human handoff.
 
 | Document | English | Russian |
 |---|---|---|
-| Methodology | [PDF](https://github.com/akarazhev/commitscope/blob/v2.4.1/docs/security-review-pdfs/en/security-review-methodology-en.pdf) | [PDF](https://github.com/akarazhev/commitscope/blob/v2.4.1/docs/security-review-pdfs/ru/security-review-methodology-ru.pdf) |
-| User Guide | [PDF](https://github.com/akarazhev/commitscope/blob/v2.4.1/docs/security-review-pdfs/en/commitscope-user-guide-en.pdf) | [PDF](https://github.com/akarazhev/commitscope/blob/v2.4.1/docs/security-review-pdfs/ru/commitscope-user-guide-ru.pdf) |
+| Methodology | [PDF](https://github.com/akarazhev/commitscope/blob/main/docs/security-review-pdfs/en/security-review-methodology-en.pdf) | [PDF](https://github.com/akarazhev/commitscope/blob/main/docs/security-review-pdfs/ru/security-review-methodology-ru.pdf) |
+| User Guide | [PDF](https://github.com/akarazhev/commitscope/blob/main/docs/security-review-pdfs/en/commitscope-user-guide-en.pdf) | [PDF](https://github.com/akarazhev/commitscope/blob/main/docs/security-review-pdfs/ru/commitscope-user-guide-ru.pdf) |
 
-These v2.4.0 handouts are included unchanged in the v2.4.1 source distribution.
-Neither v2.4.0's tag nor its release assets are rewritten.
+The current handouts cover 2.4.1. They were updated after the v2.4.1 release;
+the immutable v2.4.1 source distribution still contains the earlier 2.4.0 PDFs.
 
 ## Install v2.4.1
 

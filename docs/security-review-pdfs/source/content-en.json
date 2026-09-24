@@ -4,9 +4,9 @@
   "documents": {
     "methodology": {
       "id": "methodology",
-      "title": "Security Review Methodology | CommitScope 2.4.0",
+      "title": "Security Review Methodology | CommitScope 2.4.1",
       "subject": "International practice, company decision criteria, and the local review workflow",
-      "footer": "CommitScope 2.4.0 | Methodology | Human risk ownership",
+      "footer": "CommitScope 2.4.1 | Methodology | Human risk ownership",
       "references": [
         {
           "id": "S1",
@@ -80,7 +80,7 @@
                 {
                   "id": "m01-choice",
                   "type": "callout",
-                  "text": "Recommendation: use CommitScope 2.4.0 as the local collection and verification workflow. Semgrep, Gitleaks, Trivy, independent Claude Hunter and Verifier, and human triage are all required. READY_FOR_HUMAN_REVIEW means handoff, not approval."
+                  "text": "Recommendation: use CommitScope 2.4.1 as the local collection and verification workflow. Semgrep, Gitleaks, Trivy, independent Claude Hunter and Verifier, and human triage are all required. READY_FOR_HUMAN_REVIEW means handoff, not approval."
                 },
                 {
                   "id": "m01-limits",
@@ -575,19 +575,20 @@
             }
           ]
         }
-      ]
+      ],
+      "version": "2.4.1"
     },
     "user-guide": {
       "id": "user-guide",
-      "title": "CommitScope 2.4.0 | User Guide",
+      "title": "CommitScope 2.4.1 | User Guide",
       "subject": "Step-by-step local employee review and protected human handoff",
-      "footer": "CommitScope 2.4.0 | User Guide | Exact commit, complete stages, human decision",
+      "footer": "CommitScope 2.4.1 | User Guide | Exact commit, complete stages, human decision",
       "references": [
         {
           "id": "G1",
-          "title": "CommitScope v2.4.0 release",
-          "url": "https://github.com/akarazhev/commitscope/releases/tag/v2.4.0",
-          "checked": "2026-09-23"
+          "title": "CommitScope 2.4.1 on PyPI",
+          "url": "https://pypi.org/project/commitscope/2.4.1/",
+          "checked": "2026-09-24"
         },
         {
           "id": "G2",
@@ -667,12 +668,12 @@
           "sections": [
             {
               "id": "g02-install",
-              "heading": "Install the published tag on a supported host",
+              "heading": "Install the pinned PyPI package on a supported host",
               "blocks": [
                 {
                   "id": "g02-purpose",
                   "type": "paragraph",
-                  "text": "Objective: start from reviewed v2.4.0, not an arbitrary moving branch. CommitScope supports macOS and glibc Linux on x86_64/ARM64 with Python 3.11-3.14; native Windows is outside its scope. Use WSL2 with a supported Linux distribution. Have Git, pipx/Python, certificate roots and approved outbound HTTPS. [G1]",
+                  "text": "Objective: start from reviewed v2.4.1, not an arbitrary moving branch. CommitScope supports macOS and glibc Linux on x86_64/ARM64 with Python 3.11-3.14; native Windows is outside its scope. Use WSL2 with a supported Linux distribution. Have Git, pipx/Python, certificate roots and approved outbound HTTPS. [G1]",
                   "citations": [
                     "G1"
                   ]
@@ -680,12 +681,12 @@
                 {
                   "id": "g02-install-code",
                   "type": "code",
-                  "text": "pipx install \\\n  \"git+https://github.com/akarazhev/commitscope.git@v2.4.0\"\ncommitscope --version\ncommitscope preflight\ncommitscope bootstrap\ncommitscope doctor"
+                  "text": "pipx install commitscope==2.4.1\ncommitscope --version\ncommitscope preflight\ncommitscope bootstrap\ncommitscope doctor"
                 },
                 {
                   "id": "g02-observe",
                   "type": "paragraph",
-                  "text": "Expected: version 2.4.0, host prerequisites accepted, pinned Semgrep/Gitleaks/Trivy installed in CommitScope state, and doctor confirming scanner presence and version. Bootstrap downloads scanner executables and installs Semgrep dependencies; the Trivy database is retrieved by scan/demo, not bootstrap. Bootstrap does not execute or install the target application. Tool and DB details are recorded in run evidence."
+                  "text": "Expected: version 2.4.1, host prerequisites accepted, pinned Semgrep/Gitleaks/Trivy installed in CommitScope state, and doctor confirming scanner presence and version. Bootstrap downloads scanner executables and installs Semgrep dependencies; the Trivy database is retrieved by scan/demo, not bootstrap. Bootstrap does not execute or install the target application. Tool and DB details are recorded in run evidence."
                 },
                 {
                   "id": "g02-recover",
@@ -746,12 +747,12 @@
                 {
                   "id": "g04-purpose",
                   "type": "paragraph",
-                  "text": "Objective: practice with the bundled synthetic IDOR example, not company code. The commands below assume /protected is an approved, user-owned 0700 parent outside the target repository; replace it with an approved absolute path on your host. Obtain the v2.4.0 source solely to access its fixture and example policy. Never use a live repository until its owner permits source transfer."
+                  "text": "Objective: practice with the bundled synthetic IDOR example, not company code. The commands below assume /protected is an approved, user-owned 0700 parent outside the target repository; replace it with an approved absolute path on your host. Obtain the v2.4.1 source solely to access its fixture and example policy. Never use a live repository until its owner permits source transfer."
                 },
                 {
                   "id": "g04-source-code",
                   "type": "code",
-                  "text": "git clone --branch v2.4.0 --depth 1 \\\n  https://github.com/akarazhev/commitscope.git \\\n  /protected/commitscope-training-source\ninstall -d -m 700 /protected/training-target\ninstall -d -m 700 /protected/reviews\ncp /protected/commitscope-training-source/examples/ai-acceptance/idor/vulnerable/app.py \\\n  /protected/training-target/app.py\ninstall -m 600 /protected/commitscope-training-source/examples/review-policy.json \\\n  /protected/review-policy.json"
+                  "text": "git clone --branch v2.4.1 --depth 1 \\\n  https://github.com/akarazhev/commitscope.git \\\n  /protected/commitscope-training-source\ninstall -d -m 700 /protected/training-target\ninstall -d -m 700 /protected/reviews\ncp /protected/commitscope-training-source/examples/ai-acceptance/idor/vulnerable/app.py \\\n  /protected/training-target/app.py\ninstall -m 600 /protected/commitscope-training-source/examples/review-policy.json \\\n  /protected/review-policy.json"
                 },
                 {
                   "id": "g04-commit-code",
@@ -1074,7 +1075,7 @@
                 {
                   "id": "g09-final",
                   "type": "paragraph",
-                  "text": "A command returning 0 is not automatically a security decision. The GitHub Action and compatibility scan/ai commands are scanner or partial diagnostics; the assigned reviewer is the gate for a real repository. Check this guide against the installed v2.4.0 CLI and revalidate model and scanner behavior over time. [G1] [G2] [G5]",
+                  "text": "A command returning 0 is not automatically a security decision. The GitHub Action and compatibility scan/ai commands are scanner or partial diagnostics; the assigned reviewer is the gate for a real repository. Check this guide against the installed v2.4.1 CLI and revalidate model and scanner behavior over time. [G1] [G2] [G5]",
                   "citations": [
                     "G1",
                     "G2",
@@ -1085,7 +1086,8 @@
             }
           ]
         }
-      ]
+      ],
+      "version": "2.4.1"
     },
     "playbook": {
       "title": "LEGACY STARTER KIT 1.0 / Reference Playbook",

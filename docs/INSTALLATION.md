@@ -18,8 +18,9 @@ commitscope doctor
 previous release use
 `pipx install "git+https://github.com/akarazhev/commitscope.git@v2.4.0"`.
 For an independently reviewed local revision, replace the first command with
-`pipx install /absolute/path/to/commitscope`. The v2.4.0 presentation handouts
-remain unchanged; v2.4.1 does not alter the earlier tag or release assets.
+`pipx install /absolute/path/to/commitscope`. The current 2.4.1 handouts are
+linked from the repository README. The published v2.4.1 source distribution
+still contains the earlier 2.4.0 PDF editions.
 
 For source-checkout operation, use the same revision directly:
 
