@@ -157,6 +157,19 @@ class PdfTests(unittest.TestCase):
         self.assertEqual(arrows[0][1], arrows[1][1])
         self.assertEqual(arrows[1][1], arrows[2][1])
 
+    def test_two_column_diagrams_measure_the_drawn_label_width(self):
+        style = build_pdfs.ParagraphStyle("diagram-columns", fontName="Helvetica", fontSize=9.5, leading=13)
+        long_label = "Long Russian-style label with several words describing confidential evidence and reviewer decisions " * 2
+        for kind in ("lanes", "grid"):
+            with self.subTest(kind=kind):
+                block = {"kind": kind, "nodes": [{"id": "one", "label": long_label},
+                                                   {"id": "two", "label": "Short label"}]}
+                diagram = build_pdfs.DiagramFlowable(block, style)
+                diagram.wrap(507, 700)
+                drawn_width = (diagram.width - 50) / 2
+                needed_height = diagram.paragraphs[0].wrap(drawn_width - 20, 1000)[1] + 18
+                self.assertGreaterEqual(diagram.box_heights[0], needed_height)
+
     def test_boundary_diagram_draws_both_cross_boundary_flows(self):
         block = {"kind": "boundary", "nodes": [
             {"id": "snapshot", "label": "Snapshot"}, {"id": "evidence", "label": "Evidence"},
@@ -188,6 +201,9 @@ class PdfTests(unittest.TestCase):
             outgoing = {edge["from"] for edge in boundary["edges"]}
             self.assertFalse(any("private/" in node["label"] for node in boundary["nodes"] if node["id"] in outgoing))
             self.assertFalse(re.search(r"\b\d+(?:\.\d+)?%|\$\d+", json.dumps(document, ensure_ascii=False)))
+            if language == "ru":
+                self.assertIn("проверка и оспаривание гипотез", json.dumps(document, ensure_ascii=False))
+                self.assertNotIn("вызов гипотез", json.dumps(document, ensure_ascii=False))
             pdf = PDF_ROOT / language / f"security-review-methodology-{language}.pdf"
             extracted = run("pdftotext", "-layout", str(pdf), "-")
             self.assertEqual(extracted.returncode, 0, extracted.stderr)
@@ -216,6 +232,20 @@ class PdfTests(unittest.TestCase):
             blocks = [block for chapter in document["chapters"] for section in chapter["sections"] for block in section["blocks"]]
             self.assertTrue({"roles", "timeline", "directory", "decision"}.issubset({block["id"] for block in blocks}))
             self.assertEqual(next(block for block in blocks if block["id"] == "directory")["kind"], "grid")
+            example = next(block for block in blocks if block["id"] == "g06-example")
+            for required in ("app.py:9-11", "AUTH-001", "tenant-a", "tenant-b"):
+                self.assertIn(required, example["text"])
+            self.assertIn("illustrative" if language == "en" else "иллюстративный", example["text"].lower())
+            install = next(block for block in blocks if block["id"] == "g02-observe")["text"]
+            self.assertIn("Trivy database" if language == "en" else "БД Trivy", install)
+            self.assertIn("presence and version" if language == "en" else "наличие и версии", install)
+            pdf = PDF_ROOT / language / f"commitscope-user-guide-{language}.pdf"
+            extracted = run("pdftotext", "-layout", str(pdf), "-")
+            self.assertEqual(extracted.returncode, 0, extracted.stderr)
+            if language == "ru":
+                self.assertTrue(any("Иллюстративный синтетический пример" in page
+                                    and "07 / Защита и передача" in page
+                                    for page in extracted.stdout.split("\f")))
             prose = json.dumps(document, ensure_ascii=False)
             commands = "\n".join(block["text"] for block in blocks if block["type"] == "code")
             for required in ("git+https://github.com/akarazhev/commitscope.git@v2.4.0", "--auth account",

@@ -685,7 +685,7 @@
                 {
                   "id": "g02-observe",
                   "type": "paragraph",
-                  "text": "Expected: version 2.4.0, host prerequisites accepted, pinned Semgrep/Gitleaks/Trivy installed in CommitScope state, and doctor reporting healthy scanners. Bootstrap downloads executables and scanner data but does not execute or install the target application. The pinned tool and DB details are in the run evidence."
+                  "text": "Expected: version 2.4.0, host prerequisites accepted, pinned Semgrep/Gitleaks/Trivy installed in CommitScope state, and doctor confirming scanner presence and version. Bootstrap downloads scanner executables and installs Semgrep dependencies; the Trivy database is retrieved by scan/demo, not bootstrap. Bootstrap does not execute or install the target application. Tool and DB details are recorded in run evidence."
                 },
                 {
                   "id": "g02-recover",
@@ -908,6 +908,11 @@
                   "id": "g06-anatomy",
                   "type": "paragraph",
                   "text": "Read the top-level report.md first, then report.json for normalized finding fields and report.sarif for compatible tools. Follow each finding to evidence/ and the exact code location; inspect the strongest counterargument and omissions. Raw scanner output, source packets, model envelopes and diagnostics under private/ are confidential. A synthetic IDOR candidate is an example of a hypothesis, not proof of live model performance."
+                },
+                {
+                  "id": "g06-example",
+                  "type": "paragraph",
+                  "text": "Illustrative synthetic record, not observed model output: app.py:9-11 drops requesting_tenant and returns ORDERS[order_id]. Invariant AUTH-001 says a caller may access only its tenant's data. Evidence to test: tenant-a can request order-2 belonging to tenant-b. Counterargument: an upstream route might enforce ownership, so inspect the actual call chain before confirming. Human decision: the assigned reviewer records confirm, reject or needs-more-evidence separately in the protected decision system."
                 },
                 {
                   "id": "g06-recover",

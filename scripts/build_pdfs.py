@@ -158,8 +158,14 @@ class DiagramFlowable(Flowable):
         self.width = min(avail_width, 507)
         self.paragraphs = [Paragraph(escape(node["label"]), self.label_style) for node in self.block["nodes"]]
         kind = self.block["kind"]
-        box_width = (self.width - 50) / 2 if kind in {"boundary", "decision"} else self.width - 50
-        self.box_heights = [max(43, paragraph.wrap(box_width - 20, 1000)[1] + 18) for paragraph in self.paragraphs]
+        full_width = self.width - 50
+        column_width = full_width / 2
+        self.box_heights = []
+        for index, paragraph in enumerate(self.paragraphs):
+            box_width = full_width if kind == "decision" and index == 0 else (
+                column_width if kind in {"boundary", "lanes", "grid", "decision"} else full_width
+            )
+            self.box_heights.append(max(43, paragraph.wrap(box_width - 20, 1000)[1] + 18))
         if kind == "boundary":
             half = (len(self.box_heights) + 1) // 2
             self.height = max(sum(self.box_heights[:half]), sum(self.box_heights[half:])) + max(0, half - 1) * 14 + 38
@@ -377,7 +383,7 @@ def build_document(source: dict, kind: str, output: Path) -> None:
             first_blocks = first_section["blocks"]
             if kind == "user-guide":
                 lead_types = {block["type"] for block in first_blocks[:2]}
-                reserve = 550 if "diagram" in lead_types else 400 if "table" in lead_types else 360
+                reserve = 380 if "diagram" in lead_types else 400 if "table" in lead_types else 360
                 story.append(CondPageBreak(reserve))
             keep_count = 0 if kind == "user-guide" else (1 if first_blocks[0]["type"] == "diagram" else (
                 2 if len(first_blocks) > 1 and first_blocks[1]["type"] == "diagram" else 0))
